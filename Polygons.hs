@@ -57,21 +57,35 @@ pol_area' :: Polygon -> Double
 pol_area' [x, y]           = get_px x * get_py y - get_py x * get_px y 
 pol_area' (x : y : z : xs) = (get_px x * get_py y - get_py x * get_px y) + pol_area' (y : z : xs) 
 
---"Movemos" un polígono en el plano
+--"Movemos" un polígono en el plano. Desplazamiento con respecto a la posición dada.
 pol_move :: Polygon -> (Double, Double) -> Polygon
 pol_move xs (x, y) = List.map (\(a, b) -> (x + a, y + b)) xs 
+
+--"Movemos" un polígono en el plano. Se acomoda en la posición dada como argumento.
+pol_move_to :: Polygon -> (Double, Double) -> Polygon
+pol_move_to py (x, y)
+    | x > hx && y > hy = pol_move py (mv1, mv2)
+    | x > hx           = pol_move py (mv1, -mv2)
+    | y < hy           = pol_move py (-mv1, -mv2)
+    | otherwise        = pol_move py (-mv1, mv2)
+    where (hx, hy) = List.head py 
+          mv1      = abs (hx - x)
+          mv2      = abs (hy - y)
 
 --Escalamos un poligono. El punto de referencia será el primero del arreglo. El porcentaje de escalado toma
 --como referencia el área del polígono.
 pol_scale :: Polygon -> Double -> Polygon
 pol_scale py per = let k    = sqrt (per / 100)
                        py'  = List.map (\(x, y) -> scaleMatrix k (Matrix.fromList 2 1 [x, y])) py
-                   in List.map (\m -> let [a, b] = Matrix.toList m
-                                      in (a, b)) py'
+                       py'' = List.map (\m -> let [a, b] = Matrix.toList m
+                                              in (a, b)) py'
+                   in pol_move_to py'' (List.head py)
 
 --Rotamos un polígono; el ángulo de rotación debe expresarse en radianes
 pol_rotate :: Polygon -> Double -> Polygon
-pol_rotate py rad = List.map ()
+pol_rotate py rad = List.map (\(x, y) -> (x * c - y * s, y * c + x * s)) py
+    where c = cos rad
+          s = sin rad
 
 
 
