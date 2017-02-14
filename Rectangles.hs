@@ -17,7 +17,7 @@ data Rectangle = R {p1x :: Float,
                     p1y :: Float,
                     p2x :: Float,
                     p2y :: Float,
-                    rid :: Int} deriving Show
+                    rid :: Int} deriving (Show, Eq)
 
 --rectangle_to_path :: Rectangle -> Path
 
@@ -37,10 +37,27 @@ height_r :: Rectangle -> Float
 height_r r = p2y r - p1y r
        
 
+---------------------------
+-- START of BL algorithm --
+---------------------------
+
 -- El segundo argumento es el contenedor
 --bl_algorithm :: [Rectangle] -> Rectangle -> [[Rectangle]]
---bl_algorithm lr c = let r' = place_right_top r c 
---                        fr = bl_algorithm' r' 
+--bl_algorithm lr c = map (\lre -> place_r lre c []) (List.permutations lr)  
+
+-- El tercer argumento es la lista de rectángulos ya acomodados
+bl_algorithm :: [Rectangle] -> Rectangle -> [Rectangle] -> [Rectangle] 
+bl_algorithm []       c lr = []
+bl_algorithm (x : xs) c lr = x' : (bl_algorithm xs c (x' : lr))
+    where x' = r_bottom (place_right_top x c) c lr
+
+r_bottom :: Rectangle -> Rectangle -> [Rectangle] -> Rectangle
+r_bottom r c lr = if r == sb then sb else r_left sb c lr
+    where sb = shift_bottom r c lr
+
+r_left :: Rectangle -> Rectangle -> [Rectangle] -> Rectangle
+r_left r c lr = if r == sl then sl else r_bottom sl c lr
+    where sl = shift_left r c lr
 
 -- El segundo argumento es el contenedor
 place_right_top :: Rectangle -> Rectangle -> Rectangle 
@@ -60,7 +77,7 @@ shift_bottom r c lr = let m = R {p1x = p1x r,
                                  p2x = p2x r,
                                  p2y = p1y r,
                                  rid = -1}
-                          l = rs_within r m lr
+                          l = filter (\lre -> not ((p1x lre == p2x m) || (p2x lre == p1x m))) (rs_within r m lr)
                           y = if List.null l then p1y c else p2y (maximumBy by_ypos l)
                       in r {p1y = y, p2y = y + height_r r}
  
@@ -72,9 +89,8 @@ by_ypos r1 r2 = if y1 > y2 then GT else
 
 -- El segundo argumento es el area "de movimiento"
 rs_within :: Rectangle -> Rectangle -> [Rectangle] -> [Rectangle]
-rs_within r m lr = filter (\lre -> ((p1x m <= p2x lre) && (p2x lre <= p2x m) && (p1y m <= p2y lre) && (p2y lre <= p2y m))
-                                   || ((p1x lre < p1x m) && (p2x lre > p2x m))
-                                   || ((p1y lre < p1y m) && (p2y lre > p2y m))) lr
+rs_within r m lr = filter (\lre -> not ((p2x m < p1x lre) || (p2y m < p1y lre) 
+                                   || (p2x lre < p1x m) || (p2y lre < p1y m))) lr
 
 shift_left :: Rectangle -> Rectangle -> [Rectangle] -> Rectangle
 shift_left r c lr = let m = R {p1x = p1x c,
@@ -82,7 +98,7 @@ shift_left r c lr = let m = R {p1x = p1x c,
                                p2x = p1x r,
                                p2y = p2y r,
                                rid = -1}
-                        l = rs_within r m lr
+                        l = filter (\lre -> not ((p1y lre == p2y m) || (p2y lre == p1y m))) (rs_within r m lr)
                         x = if List.null l then p1x c else p2x (maximumBy by_xpos l)
                     in r {p1x = x, p2x = x + width_r r}
 
@@ -92,8 +108,9 @@ by_xpos r1 r2 = if x1 > x2 then GT else
     where x1 = p2x r1
           x2 = p2x r2
 
---rs_withinx :: Rectangle -> Rectangle -> [Rectangle] -> [Rectangle]
---rs_withinx r m lr = filter (\lre -> (p1x )) lr
+-------------------------
+-- END of BL algorithm --
+-------------------------
 
 --fitness_function :: 
 --fitness_function
