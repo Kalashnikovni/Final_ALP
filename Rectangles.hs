@@ -1,6 +1,6 @@
--- =================================================================
--- ===== Implementación de funciones referidas a los polígonos =====
--- =================================================================
+-- ===================================================================
+-- ===== Implementación de funciones referidas a los rectángulos =====
+-- ===================================================================
 
 module Rectangles where
 
@@ -21,9 +21,6 @@ data Rectangle = R {p1x :: Float,
 
 --rectangle_to_path :: Rectangle -> Path
 
-sort_r :: [Rectangle] -> [Rectangle]
-sort_r lr = List.sortBy compare_width_r lr
-
 compare_width_r :: Rectangle -> Rectangle -> Ordering
 compare_width_r r1 r2 = if w1 > w2 then LT else
                             if w1 == w2 then EQ else GT  
@@ -35,15 +32,13 @@ width_r r = p2x r - p1x r
 
 height_r :: Rectangle -> Float
 height_r r = p2y r - p1y r
-       
+
+area_r :: Rectangle -> Float
+area_r r = height_r r * width_r r       
 
 ---------------------------
 -- START of BL algorithm --
 ---------------------------
-
--- El segundo argumento es el contenedor
---bl_algorithm :: [Rectangle] -> Rectangle -> [[Rectangle]]
---bl_algorithm lr c = map (\lre -> place_r lre c []) (List.permutations lr)  
 
 -- El tercer argumento es la lista de rectángulos ya acomodados
 bl_algorithm :: [Rectangle] -> Rectangle -> [Rectangle] -> [Rectangle] 
@@ -78,11 +73,11 @@ shift_bottom r c lr = let m = R {p1x = p1x r,
                                  p2y = p1y r,
                                  rid = -1}
                           l = filter (\lre -> not ((p1x lre == p2x m) || (p2x lre == p1x m))) (rs_within r m lr)
-                          y = if List.null l then p1y c else p2y (maximumBy by_ypos l)
+                          y = if List.null l then p1y c else p2y (maximumBy by_2ypos l)
                       in r {p1y = y, p2y = y + height_r r}
  
-by_ypos :: Rectangle -> Rectangle -> Ordering
-by_ypos r1 r2 = if y1 > y2 then GT else
+by_2ypos :: Rectangle -> Rectangle -> Ordering
+by_2ypos r1 r2 = if y1 > y2 then GT else
                     if y1 == y2 then EQ else LT  
     where y1 = p2y r1
           y2 = p2y r2
@@ -99,11 +94,11 @@ shift_left r c lr = let m = R {p1x = p1x c,
                                p2y = p2y r,
                                rid = -1}
                         l = filter (\lre -> not ((p1y lre == p2y m) || (p2y lre == p1y m))) (rs_within r m lr)
-                        x = if List.null l then p1x c else p2x (maximumBy by_xpos l)
+                        x = if List.null l then p1x c else p2x (maximumBy by_2xpos l)
                     in r {p1x = x, p2x = x + width_r r}
 
-by_xpos :: Rectangle -> Rectangle -> Ordering
-by_xpos r1 r2 = if x1 > x2 then GT else
+by_2xpos :: Rectangle -> Rectangle -> Ordering
+by_2xpos r1 r2 = if x1 > x2 then GT else
                       if x1 == x2 then EQ else LT
     where x1 = p2x r1
           x2 = p2x r2
@@ -112,15 +107,70 @@ by_xpos r1 r2 = if x1 > x2 then GT else
 -- END of BL algorithm --
 -------------------------
 
---fitness_function :: 
---fitness_function
+--------------------------------
+-- START of genetic algorithm --
+--------------------------------
 
-select_random_r :: [Rectangle] -> Rectangle
+to_permutation :: [Rectangle] -> [Int]
+to_permutation lr = map (\x -> rid x) lr
+
+to_lr :: [Int] -> [Rectangle] -> [Rectangle]
+to_lr [] _        = []
+to_lr (x : xs) lr = filter (\y -> x == rid y) lr ++ (to_lr xs lr)
+
+-- El segundo argumento es el contenedor
+genetic_algorithm :: [Rectangle] -> Rectangle -> Int -> [([Rectangle], Float)]
+genetic_algorithm lr c m = let pi1        = sort_r lr
+                               res        = bl_algorithm pi1 c []
+                               a1         = [(pi1, fitness_function pi1 c)]
+                               population = a1 ++ population_loop (permutations lr) c m 
+                           in population
+
+sort_r :: [Rectangle] -> [Rectangle]
+sort_r lr = List.sortBy compare_width_r lr
+
+-- El segundo argumento es el contenedor
+fitness_function :: [Rectangle] -> Rectangle -> Float 
+fitness_function lr c = area_r c - fitness_function' (sortBy by_1xpos lr) c (p1x c)
+
+-- El tercer argumento guarda "hasta dónde se avanzó" en el eje de las x's
+fitness_function' :: [Rectangle] -> Rectangle -> Float -> Float
+fitness_function' [] _ _    = 0
+fitness_function' xs c oldx = (p2y slt - p1y c) * (newx - oldx) +
+                              fitness_function' (xs \\ (filter (\y -> p2x y <= newx) xs)) c newx
+    where slt  = select_left_top xs
+          newx = p2x slt
+
+select_left_top :: [Rectangle] -> Rectangle 
+select_left_top (x : xs) = if List.null eq then x else maximumBy by_2ypos eq
+    where eq = filter (\y -> p1x x == p1x y) xs
+
+by_1xpos :: Rectangle -> Rectangle -> Ordering
+by_1xpos r1 r2 = if x1 > x2 then GT else
+                      if x1 == x2 then EQ else LT
+    where x1 = p1x r1
+          x2 = p1x r2
+
+population_loop :: [[Rectangle]] -> Rectangle -> Int -> [([Rectangle], Float)]
+population_loop lr c m 
+    | m == 0    = []
+    | otherwise = (ran, fitness_function ran c) : (population_loop lr c (m - 1)) 
+    where ran = bl_algorithm (select_random_r lr) c []
+
+select_random_r :: [[Rectangle]] -> [Rectangle]
 select_random_r lr = lr !! (unsafePerformIO (randomRIO (0, List.length lr - 1)))  
 
---genetic_algorithm :: [Rectangles] -> ???
---genetic_algorithm lr = let pi1 = sort_rectangles lr
---                           res = bl_algorithm pi1
+select_random_n :: (Float, Float) 
+select_random_n = if n1 == 1 || n2 == 1 then select_random_n else (n1, n2)
+    where n1 = unsafePerformIO (randomRIO (0, 1))
+          n2 = unsafePerformIO (randomRIO (0, 1))
+
+--main_loop :: [[Rectangle]]
+
+------------------------------
+-- END of genetic algorithm --
+------------------------------
+
 
 -- ***************** --
 -- Sector de pruebas --
@@ -130,3 +180,9 @@ r2 = R {p1x = 10, p1y = 0, p2x = 15, p2y = 7, rid = 2}
 r3 = R {p1x = 0, p1y = 0, p2x = 10, p2y = 5, rid = 3}
 r4 = R {p1x = 0, p1y = 5, p2x = 7, p2y = 14, rid = 4}
 c  = R {p1x = 0, p1y = 0, p2x = 17, p2y = 20, rid = 0}
+
+cc = R {p1x = 0, p1y = 0, p2x = 20, p2y = 20, rid = 0}
+a1 = R {p1x = 0, p1y = 0, p2x = 5, p2y = 16, rid = 1}
+a2 = R {p1x = 8, p1y = 0, p2x = 17, p2y = 14, rid = 2}
+a3 = R {p1x = 5, p1y = 0, p2x = 8, p2y = 3, rid = 3}
+a4 = R {p1x = 5, p1y = 14, p2x = 10, p2y = 16, rid = 4}
