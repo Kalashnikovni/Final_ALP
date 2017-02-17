@@ -8,6 +8,7 @@ import Polygons
 import Data.List as List
 import System.Random as Random
 import System.IO.Unsafe as Unsafe
+import Control.Monad.State.Lazy as StateMonad
 
 -- Representamos un rectángulo de acuerdo a su diagonal "de izquierda a derecha, de abajo hacia arriba". 
 -- Es decir, con un vector del cuadrante I.
@@ -35,6 +36,7 @@ height_r r = p2y r - p1y r
 
 area_r :: Rectangle -> Float
 area_r r = height_r r * width_r r       
+
 
 ---------------------------
 -- START of BL algorithm --
@@ -119,12 +121,13 @@ to_lr [] _        = []
 to_lr (x : xs) lr = filter (\y -> x == rid y) lr ++ (to_lr xs lr)
 
 -- El segundo argumento es el contenedor
-genetic_algorithm :: [Rectangle] -> Rectangle -> Int -> [([Rectangle], Float)]
-genetic_algorithm lr c m = let pi1        = sort_r lr
-                               res        = bl_algorithm pi1 c []
-                               a1         = [(pi1, fitness_function pi1 c)]
-                               population = a1 ++ population_loop (permutations lr) c m 
-                           in population
+genetic_algorithm :: [Rectangle] -> Rectangle -> Int -> Int -> [([Rectangle], Float)]
+genetic_algorithm lr c m t = let pi1        = sort_r lr
+                                 res        = bl_algorithm pi1 c []
+                                 a1         = [(pi1, fitness_function pi1 c)]
+                                 population = a1 ++ population_loop (permutations lr) c m 
+                                 loop       = main_loop population m t 
+                             in population
 
 sort_r :: [Rectangle] -> [Rectangle]
 sort_r lr = List.sortBy compare_width_r lr
@@ -155,17 +158,39 @@ population_loop :: [[Rectangle]] -> Rectangle -> Int -> [([Rectangle], Float)]
 population_loop lr c m 
     | m == 0    = []
     | otherwise = (ran, fitness_function ran c) : (population_loop lr c (m - 1)) 
-    where ran = bl_algorithm (select_random_r lr) c []
+    where ran = bl_algorithm (select_random lr) c []
 
-select_random_r :: [[Rectangle]] -> [Rectangle]
-select_random_r lr = lr !! (unsafePerformIO (randomRIO (0, List.length lr - 1)))  
+select_random :: [[a]] -> [a]
+select_random lr = lr !! (unsafePerformIO (randomRIO (0, List.length lr - 1)))  
 
 select_random_n :: (Float, Float) 
 select_random_n = if n1 == 1 || n2 == 1 then select_random_n else (n1, n2)
     where n1 = unsafePerformIO (randomRIO (0, 1))
           n2 = unsafePerformIO (randomRIO (0, 1))
 
---main_loop :: [[Rectangle]]
+main_loop :: [([Rectangle], Float)] -> Int -> Int -> [([Rectangle], Float)]
+main_loop pop m t 
+    | t == 0    = pop
+    | otherwise = pop--replace_worst pop ()
+    where pi      = map (\x -> map (\y -> rid y) (fst x)) pop
+          (a, b)  = prop_selection pi m
+          --new     = mutation (normal_mutation (crossover i1 i2))   
+
+prop_selection :: [[Int]] -> Int -> ([Int], [Int])
+prop_selection lr m = let (p1, p2) = select_random_n
+                          a        = length (filter (\x -> x <= p1) lim)
+                          b        = length (filter (\x -> x <= p2) lim) 
+                      in (lr !! a, lr !! b )
+    where lim = create_l m
+
+create_l :: Int -> [Float]
+create_l m = map (\x -> (fromIntegral x :: Float) / (fromIntegral m :: Float)) [0..m]
+
+crossover :: [Int] -> [Int] -> [Int]
+crossover i1 i2 = i1' ++ (i2 \\ i1')  
+    where p   = unsafePerformIO (randomRIO (1, length i1)) 
+          q   = unsafePerformIO (randomRIO (p, length i1))
+          i1' = take (p - q) i1
 
 ------------------------------
 -- END of genetic algorithm --
@@ -186,3 +211,4 @@ a1 = R {p1x = 0, p1y = 0, p2x = 5, p2y = 16, rid = 1}
 a2 = R {p1x = 8, p1y = 0, p2x = 17, p2y = 14, rid = 2}
 a3 = R {p1x = 5, p1y = 0, p2x = 8, p2y = 3, rid = 3}
 a4 = R {p1x = 5, p1y = 14, p2x = 10, p2y = 16, rid = 4}
+
