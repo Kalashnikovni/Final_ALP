@@ -6,6 +6,7 @@ module Rectangles where
 
 import Polygons
 import Data.List as List
+import System.Environment
 import System.Random as Random
 import System.IO.Unsafe as Unsafe
 import Control.Monad.State.Lazy as StateMonad
@@ -37,6 +38,9 @@ height_r r = p2y r - p1y r
 area_r :: Rectangle -> Float
 area_r r = height_r r * width_r r       
 
+random_l = (randomRs (0, 1) (mkStdGen 0)) :: [Float]
+
+random_n = randoms (mkStdGen 0) :: [Int]
 
 ---------------------------
 -- START of BL algorithm --
@@ -158,44 +162,41 @@ population_loop :: [[Rectangle]] -> Rectangle -> Int -> [([Rectangle], Float)]
 population_loop lr c m 
     | m == 0    = []
     | otherwise = (ran, fitness_function ran c) : (population_loop lr c (m - 1)) 
-    where ran = bl_algorithm (select_random lr) c []
-
-select_random :: [[a]] -> [a]
-select_random lr = lr !! (unsafePerformIO (randomRIO (0, List.length lr - 1)))  
-
-select_random_n :: (Float, Float) 
-select_random_n = if n1 == 1 || n2 == 1 then select_random_n else (n1, n2)
-    where n1 = unsafePerformIO (randomRIO (0, 1))
-          n2 = unsafePerformIO (randomRIO (0, 1))
+    where ran = bl_algorithm (lr !! (mod (random_n !! m) (length lr))) c []
 
 main_loop :: [([Rectangle], Float)] -> Int -> Int -> [([Rectangle], Float)]
 main_loop pop m t 
     | t == 0    = pop
     | otherwise = pop--replace_worst pop ()
     where pi      = map (\x -> map (\y -> rid y) (fst x)) pop
-          (a, b)  = prop_selection pi m
-          --new     = mutation (normal_mutation (crossover i1 i2))   
+          (a, b)  = prop_selection pi m t
+          --new     = mutation (normal_mutation (crossover i1 i2 t))   
 
-prop_selection :: [[Int]] -> Int -> ([Int], [Int])
-prop_selection lr m = let (p1, p2) = select_random_n
-                          a        = length (filter (\x -> x <= p1) lim)
-                          b        = length (filter (\x -> x <= p2) lim) 
-                      in (lr !! a, lr !! b )
+prop_selection :: [[Int]] -> Int -> Int -> ([Int], [Int])
+prop_selection lr m t = let (p1, p2) = (random_l !! (2 * t), random_l !! (2 * t - 1))
+                            a        = length (filter (\x -> x <= p1) lim)
+                            b        = length (filter (\x -> x <= p2) lim) 
+                        in (lr !! a, lr !! b )
     where lim = create_l m
 
 create_l :: Int -> [Float]
 create_l m = map (\x -> (fromIntegral x :: Float) / (fromIntegral m :: Float)) [0..m]
 
-crossover :: [Int] -> [Int] -> [Int]
-crossover i1 i2 = i1' ++ (i2 \\ i1')  
-    where p   = unsafePerformIO (randomRIO (1, length i1)) 
-          q   = unsafePerformIO (randomRIO (p, length i1))
-          i1' = take (p - q) i1
+crossover :: [Int] -> [Int] -> Int -> [Int]
+crossover i1 i2 t = i1' ++ (i2 \\ i1')  
+    where p   = mod (random_n !! (4 * t)) (length i1) 
+          q   = mod (random_n !! (4 * t - 1)) (length i1 - p) + 1
+          i1' = take q (drop p i1)
+
+mutation :: 
 
 ------------------------------
 -- END of genetic algorithm --
-------------------------------
-
+------------------------------  
+          
+--------------------------
+-- END of main function --
+--------------------------
 
 -- ***************** --
 -- Sector de pruebas --
