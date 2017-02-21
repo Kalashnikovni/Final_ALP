@@ -6,7 +6,7 @@ module Rectangles where
 
 import Polygons
 import Data.List as L
-import SeqArray as SA 
+--import SeqArray as SA 
 import System.Environment
 import System.Random as Random
 import System.IO.Unsafe as Unsafe
@@ -129,21 +129,22 @@ to_lr (x : xs) lr = filter (\y -> x == rid y) lr ++ (to_lr xs lr)
 -- El tercer argumento es el cardinal del conjunto poblacional
 -- El cuarto argumento es la cantidad de iteraciones del algoritmo genético
 -- El quinto argumento es la probabilidad de rotación
-genetic_algorithm :: [Rectangle] -> Rectangle -> Int -> Int -> Float -> [([Rectangle], Float)]
-genetic_algorithm lr c m t pm = let pi1        = sort_r lr
+genetic_algorithm :: [Rectangle] -> Rectangle -> Int -> Int -> Float -> ([Rectangle], Float)
+genetic_algorithm lr c m t pm = let n          = length lr
+                                    pi1        = sort_r lr
                                     res        = bl_algorithm pi1 c []
                                     a1         = [(pi1, fitness_function pi1 c)]
                                     population = a1 ++ population_loop (permutations lr) c m 
-                                    loop       = main_loop population m t pm 
-                                                 (fromList (take (m + t * (n + 2)) random_n)) (fromList (take (2 * t * (n + 1)) random_l))
-                                in population
+                                    loop       = main_loop population c m t pm 
+                                                 (take (t * (n + 2)) (drop m random_n)) (take (2 * t * (n + 1)) random_l) 
+                                in maximumBy by_fitness loop
 
 sort_r :: [Rectangle] -> [Rectangle]
 sort_r lr = sortBy compare_width_r lr
 
 -- El segundo argumento es el contenedor
 fitness_function :: [Rectangle] -> Rectangle -> Float 
-fitness_function lr c = area_r c - fitness_function' (sortBy by_1xpos lr) c (p1x c)
+fitness_function lr c = area_r c - fitness_function' (sortBy by_2xpos lr) c (p1x c)
 
 -- El tercer argumento guarda "hasta dónde se avanzó" en el eje de las x's
 fitness_function' :: [Rectangle] -> Rectangle -> Float -> Float
@@ -155,7 +156,7 @@ fitness_function' xs c oldx = (p2y slt - p1y c) * (newx - oldx) +
 
 select_left_top :: [Rectangle] -> Rectangle 
 select_left_top (x : xs) = if null eq then x else maximumBy by_2ypos eq
-    where eq = filter (\y -> p1x x == p1x y) xs
+    where eq = filter (\y -> p2x x == p2x y) xs
 
 by_1xpos :: Rectangle -> Rectangle -> Ordering
 by_1xpos r1 r2 = if x1 > x2 then GT else
@@ -170,53 +171,59 @@ population_loop lr c m
     where ran = bl_algorithm (lr !! (mod (random_n !! m) (length lr))) c []
 
 -- El primer argumento representa a cada configuracion junto con su fitness
--- El segundo argumento es el cardinal de la poblacion
--- El tercer argumento es la cantidad de iteraciones del loop
--- El cuarto argumento es la probabilidad de mutación
--- El quinto argumento es una lista de numeros flotantes random entre 0 y 1
--- El sexto argumento es una lista de numeros enteros random
-main_loop :: Seq s => [([Rectangle], Float)] -> Int -> Int -> Float -> s Int -> s Float -> [([Rectangle], Float)]
-main_loop pop m t pm
+-- El segundo argumento es el contenedor
+-- El tercer argumento es el cardinal de la poblacion
+-- El cuarto argumento es la cantidad de iteraciones del loop
+-- El quinto argumento es la probabilidad de mutación
+-- El sexto argumento es una lista de numeros flotantes random entre 0 y 1
+-- El séptimo argumento es una lista de numeros enteros random
+main_loop :: [([Rectangle], Float)] -> Rectangle -> Int -> Int -> Float -> [Int] -> [Float] -> [([Rectangle], Float)]
+main_loop pop c m t pm r_n r_l
     | t == 0    = pop
-    | otherwise = pop--replace_worst pop last
+    | otherwise = main_loop new_pop c m (t - 1) pm (drop (n + 2) r_n) (drop (2 * n) r_l)
     where example = fst (head pop)
+          n       = length example 
           pi      = map (\x -> map (\y -> rid y) (fst x)) pop
-          (a, b)  = prop_selection pi m (2 * t)
-          new     = crossover a b (2 * t + m)
+          (a, b)  = prop_selection pi m r_l
+          new     = crossover a b r_n
           new_r   = to_lr new example 
-          mut_n   = mutation_normal new_r (length example * t + 2 * t + m) pm
-          --mut =
-          --last = bl_algorithm 
+          mut_n   = mutation_normal new_r pm (drop 2 r_n) (drop 2 r_l)
+          mut     = mutation mut_n pm (drop n r_l)
+          last    = bl_algorithm mut c []
+          new_pop = replace_worst pop (last, fitness_function last c)
 
-prop_selection :: [[Int]] -> Int -> Int -> ([Int], [Int])
-prop_selection lr m t = let (p1, p2) = (random_l !! t, random_l !! (t - 1))
-                            a        = length (filter (\x -> x <= p1) lim)
-                            b        = length (filter (\x -> x <= p2) lim) 
-                        in (lr !! a, lr !! b )
+prop_selection :: [[Int]] -> Int -> [Float] -> ([Int], [Int])
+prop_selection lr m r_l = let (p1, p2) = (head r_l, head (tail r_l))
+                              a        = length (filter (\x -> x <= p1) lim)
+                              b        = length (filter (\x -> x <= p2) lim) 
+                          in (lr !! a, lr !! b )
     where lim = create_l m
 
 create_l :: Int -> [Float]
 create_l m = map (\x -> (fromIntegral x :: Float) / (fromIntegral m :: Float)) [0..m]
 
-crossover :: [Int] -> [Int] -> Int -> [Int]
-crossover i1 i2 t = i1' ++ (i2 \\ i1')  
-    where p   = mod (random_n !! t) (length i1) 
-          q   = mod (random_n !! (t - 1)) (length i1 - p) + 1
+crossover :: [Int] -> [Int] -> [Int] -> [Int]
+crossover i1 i2 r_n = i1' ++ (i2 \\ i1')  
+    where p   = mod (head r_n) (length i1) 
+          q   = mod (head (tail r_n)) (length i1 - p) + 1
           i1' = take q (drop p i1)
 
-mutation_normal :: [Rectangle] -> Int -> Float -> [Rectangle]
-mutation_normal []       _ _  = []
-mutation_normal (l : lr) t pm = if random_l !! t < pm then (lr !! ran) : (mutation_normal (tail (swap 0 ran lr)) (t - 1) pm)  
-                                else l : (mutation_normal lr (t - 1) pm)
-    where ran = mod (random_n !! t) (length lr)
+mutation_normal :: [Rectangle] -> Float -> [Int] -> [Float] -> [Rectangle]
+mutation_normal []       _ _ _ = []
+mutation_normal (l : lr) pm r_n r_l = if head random_l < pm 
+                                        then (lr !! ran) : (mutation_normal (tail (swap 0 ran lr)) pm r_n' r_l')  
+                                        else l : (mutation_normal lr pm r_n' r_l')
+    where ran  = mod (head r_n) (length lr)
+          r_n' = drop 1 r_n
+          r_l' = drop 1 r_l
 
 -- Se asume que x < y
 swap :: Int -> Int -> [a] -> [a]
 swap x y xs = (take x xs) ++ [xs !! y] ++ take (y - x - 1) (drop (x + 1) xs) ++ [xs !! x] ++ take (length xs - y) (drop (y + 1) xs)   
 
-mutation :: [Rectangle] -> Int -> Float -> [Rectangle]
-mutation [] _ _        = []
-mutation (l : lr) t pm = (if random_l !! t < pm then rotate_90 l else l) : (mutation lr (t - 1) pm) 
+mutation :: [Rectangle] -> Float -> [Float] -> [Rectangle]
+mutation [] _ _          = []
+mutation (l : lr) pm r_l = (if head r_l < pm then rotate_90 l else l) : (mutation lr pm (drop 1 r_l)) 
 
 rotate_90 :: Rectangle -> Rectangle
 rotate_90 r = R {p1x = x,
@@ -249,7 +256,7 @@ r1 = R {p1x = 0, p1y = 0, p2x = 3, p2y = 3, rid = 1}
 r2 = R {p1x = 10, p1y = 0, p2x = 15, p2y = 7, rid = 2}
 r3 = R {p1x = 0, p1y = 0, p2x = 10, p2y = 5, rid = 3}
 r4 = R {p1x = 0, p1y = 5, p2x = 7, p2y = 14, rid = 4}
-c  = R {p1x = 0, p1y = 0, p2x = 17, p2y = 20, rid = 0}
+c1 = R {p1x = 0, p1y = 0, p2x = 17, p2y = 20, rid = 0}
 
 cc = R {p1x = 0, p1y = 0, p2x = 20, p2y = 20, rid = 0}
 a1 = R {p1x = 0, p1y = 0, p2x = 5, p2y = 16, rid = 1}
