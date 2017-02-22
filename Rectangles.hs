@@ -143,8 +143,7 @@ sort_r :: [Rectangle] -> [Rectangle]
 sort_r lr = sortBy compare_width_r lr
 
 fitness_function :: [Rectangle] -> Rectangle -> Float
-fitness_function lr c = sum (map area_r (ff lr c' lr \\ lr)) 
-                        + (p2x c - max_x) * (height_r c) + (p2y c - max_y) * max_x  
+fitness_function lr c = sum (map area_r (ff lr c' \\ lr)) + area_r c - area_r c'  
     where max_x = p2x (maximumBy by_2xpos lr)
           max_y = p2y (maximumBy by_2ypos lr)
           c'    = R {p1x = p1x c,
@@ -153,57 +152,40 @@ fitness_function lr c = sum (map area_r (ff lr c' lr \\ lr))
                      p2y = max_y,
                      rid = rid c}
 
-ff :: [Rectangle] -> Rectangle -> [Rectangle] -> [Rectangle]
-ff [] _ all       = all 
-ff (l : lr) c all = case (null above, null side) of
-                        (True, True)  -> ff lr c ([up, right] ++ all)
-                        (True, False) -> if c_u 
-                                         then ff lr c (up : all) 
-                                         else ff lr c (up {p1x = m2} : all)
-                        (False, True) -> if c_r 
-                                         then ff lr c (right : all)
-                                         else ff lr c (right {p1y = m4} : all)
-                        (_, _)        -> if c_u 
-                                         then if c_r 
-                                              then ff lr c all
-                                              else ff lr c (right {p1y = m4} : all)  
-                                         else if c_r
-                                              then ff lr c (up {p1x = m2} : all)
-                                              else ff lr c ([up {p1x = m2}, right {p1y = m4}] ++ all)
-    where up       = R {p1x = p1x l,
-                        p1y = p2y l,
-                        p2x = p2x l,
-                        p2y = p2y c,
-                        rid = -1}
-          right    = R {p1x = p2x l,
-                        p1y = p1y l,
-                        p2x = p2x c,
-                        p2y = p2y l,
-                        rid = -2}
+ff :: [Rectangle] -> Rectangle -> [Rectangle]
+ff lr c = up ++ (filter (\x -> and (map (\y -> null (rs_within x [y])) up)) right)
+    where up    = (up_r (sort_r lr) c lr) \\ lr
+          right = (right_r lr  c lr) \\ lr
+
+up_r :: [Rectangle] -> Rectangle -> [Rectangle] -> [Rectangle]
+up_r [] _ all       = all
+up_r (l : lr) c all = up_r lr c ((if null above then [up] else c_u) ++ all)  
+    where up       = get_up l c
           above    = filter (\x -> p1x x /= p2x l && p1x l /= p2x x && x /= l) (rs_within up all)
-          side     = filter (\x -> p1y x /= p2y l && p1y l /= p2y x && x /= l) (rs_within right all)
           (m1, m2) = cover_up above
-          (m3, m4) = cover_right side
-          c_u      = minus (p2x l) m2 == 0
-          c_r      = minus (p2y l) m4 == 0
-            
+          c_u      = if minus (p2x l) m2 == 0 then [] else [up {p1x = m2}]  
 
-{-fitness_function :: [Rectangle] -> Rectangle -> Float
-fitness_function lr c = ((p2x c - p2x (maximumBy by_2xpos lr)) * height_r c) + ff lr lr c
+right_r :: [Rectangle] -> Rectangle -> [Rectangle] -> [Rectangle]
+right_r [] _ all       = all
+right_r (l : lr) c all = right_r lr c ((if null side then [right] else c_r) ++ all)  
+    where right    = get_right l c
+          side     = filter (\x -> p1y x /= p2y l && p1y l /= p2y x && x /= l) (rs_within right all)
+          (m1, m2) = cover_right side
+          c_r      = if minus (p2y l) m2 == 0 then [] else [right {p1y = m2}]  
 
-ff :: [Rectangle] -> [Rectangle] -> Rectangle -> Float
-ff [] all c       = 0 
-ff (l : lr) all c = (if null above then area_r up else (minus (p2x l) max) * (height_r up)) + ff lr all c 
-    where up         = R {p1x = p1x l,
-                          p1y = p2y l,
-                          p2x = p2x l,
-                          p2y = p2y c,
-                          rid = -1}
-          above      = filter (\x -> p1x x /= p2x l && p1x l /= p2x x && x /= l) (rs_within up all)
-          (min, max) = cover above 
-          w1         = max - min
-          w          = width_r l
--}
+get_up :: Rectangle -> Rectangle -> Rectangle
+get_up r c = R {p1x = p1x r,
+                p1y = p2y r,
+                p2x = p2x r,
+                p2y = p2y c,
+                rid = -1}
+
+get_right :: Rectangle -> Rectangle -> Rectangle
+get_right r c = R {p1x = p2x r, 
+                   p1y = p1y r,
+                   p2x = p2x c,
+                   p2y = p2y r,
+                   rid = -1}
 
 cover_up :: [Rectangle] -> (Float, Float)
 cover_up []               = (0, 0)
