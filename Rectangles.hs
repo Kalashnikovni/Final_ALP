@@ -79,7 +79,7 @@ shift_bottom r c lr = let m = R {p1x = p1x r,
                                  p2x = p2x r,
                                  p2y = p1y r,
                                  rid = -1}
-                          l = filter (\lre -> not ((p1x lre == p2x m) || (p2x lre == p1x m))) (rs_within r m lr)
+                          l = filter (\lre -> not ((p1x lre == p2x m) || (p2x lre == p1x m))) (rs_within m lr)
                           y = if null l then p1y c else p2y (maximumBy by_2ypos l)
                       in r {p1y = y, p2y = y + height_r r}
  
@@ -90,9 +90,9 @@ by_2ypos r1 r2 = if y1 > y2 then GT else
           y2 = p2y r2
 
 -- El segundo argumento es el area "de movimiento"
-rs_within :: Rectangle -> Rectangle -> [Rectangle] -> [Rectangle]
-rs_within r m lr = filter (\lre -> not ((p2x m < p1x lre) || (p2y m < p1y lre) 
-                                   || (p2x lre < p1x m) || (p2y lre < p1y m))) lr
+rs_within :: Rectangle -> [Rectangle] -> [Rectangle]
+rs_within m lr = filter (\lre -> not ((p2x m < p1x lre) || (p2y m < p1y lre) 
+                                 || (p2x lre < p1x m) || (p2y lre < p1y m))) lr
 
 shift_left :: Rectangle -> Rectangle -> [Rectangle] -> Rectangle
 shift_left r c lr = let m = R {p1x = p1x c,
@@ -100,7 +100,7 @@ shift_left r c lr = let m = R {p1x = p1x c,
                                p2x = p1x r,
                                p2y = p2y r,
                                rid = -1}
-                        l = filter (\lre -> not ((p1y lre == p2y m) || (p2y lre == p1y m))) (rs_within r m lr)
+                        l = filter (\lre -> not ((p1y lre == p2y m) || (p2y lre == p1y m))) (rs_within m lr)
                         x = if null l then p1x c else p2x (maximumBy by_2xpos l)
                     in r {p1x = x, p2x = x + width_r r}
 
@@ -133,7 +133,7 @@ genetic_algorithm :: [Rectangle] -> Rectangle -> Int -> Int -> Float -> ([Rectan
 genetic_algorithm lr c m t pm = let n          = length lr
                                     pi1        = sort_r lr
                                     res        = bl_algorithm pi1 c []
-                                    a1         = [(pi1, fitness_function pi1 c)]
+                                    a1         = [(res, fitness_function res c)]
                                     population = a1 ++ population_loop (permutations lr) c m 
                                     loop       = main_loop population c m t pm 
                                                  (take (t * (n + 2)) (drop m random_n)) (take (2 * t * (n + 1)) random_l) 
@@ -142,27 +142,87 @@ genetic_algorithm lr c m t pm = let n          = length lr
 sort_r :: [Rectangle] -> [Rectangle]
 sort_r lr = sortBy compare_width_r lr
 
--- El segundo argumento es el contenedor
-fitness_function :: [Rectangle] -> Rectangle -> Float 
-fitness_function lr c = area_r c - fitness_function' (sortBy by_2xpos lr) c (p1x c)
+fitness_function :: [Rectangle] -> Rectangle -> Float
+fitness_function lr c = sum (map area_r (ff lr c' lr \\ lr)) 
+                        + (p2x c - max_x) * (height_r c) + (p2y c - max_y) * max_x  
+    where max_x = p2x (maximumBy by_2xpos lr)
+          max_y = p2y (maximumBy by_2ypos lr)
+          c'    = R {p1x = p1x c,
+                     p1y = p1y c,
+                     p2x = max_x,
+                     p2y = max_y,
+                     rid = rid c}
 
--- El tercer argumento guarda "hasta dónde se avanzó" en el eje de las x's
-fitness_function' :: [Rectangle] -> Rectangle -> Float -> Float
-fitness_function' [] _ _    = 0
-fitness_function' xs c oldx = (p2y slt - p1y c) * (newx - oldx) +
-                              fitness_function' (xs \\ (filter (\y -> p2x y <= newx) xs)) c newx
-    where slt  = select_left_top xs
-          newx = p2x slt
+ff :: [Rectangle] -> Rectangle -> [Rectangle] -> [Rectangle]
+ff [] _ all       = all 
+ff (l : lr) c all = case (null above, null side) of
+                        (True, True)  -> ff lr c ([up, right] ++ all)
+                        (True, False) -> if c_u 
+                                         then ff lr c (up : all) 
+                                         else ff lr c (up {p1x = m2} : all)
+                        (False, True) -> if c_r 
+                                         then ff lr c (right : all)
+                                         else ff lr c (right {p1y = m4} : all)
+                        (_, _)        -> if c_u 
+                                         then if c_r 
+                                              then ff lr c all
+                                              else ff lr c (right {p1y = m4} : all)  
+                                         else if c_r
+                                              then ff lr c (up {p1x = m2} : all)
+                                              else ff lr c ([up {p1x = m2}, right {p1y = m4}] ++ all)
+    where up       = R {p1x = p1x l,
+                        p1y = p2y l,
+                        p2x = p2x l,
+                        p2y = p2y c,
+                        rid = -1}
+          right    = R {p1x = p2x l,
+                        p1y = p1y l,
+                        p2x = p2x c,
+                        p2y = p2y l,
+                        rid = -2}
+          above    = filter (\x -> p1x x /= p2x l && p1x l /= p2x x && x /= l) (rs_within up all)
+          side     = filter (\x -> p1y x /= p2y l && p1y l /= p2y x && x /= l) (rs_within right all)
+          (m1, m2) = cover_up above
+          (m3, m4) = cover_right side
+          c_u      = minus (p2x l) m2 == 0
+          c_r      = minus (p2y l) m4 == 0
+            
 
-select_left_top :: [Rectangle] -> Rectangle 
-select_left_top (x : xs) = if null eq then x else maximumBy by_2ypos eq
-    where eq = filter (\y -> p2x x == p2x y) xs
+{-fitness_function :: [Rectangle] -> Rectangle -> Float
+fitness_function lr c = ((p2x c - p2x (maximumBy by_2xpos lr)) * height_r c) + ff lr lr c
 
-by_1xpos :: Rectangle -> Rectangle -> Ordering
-by_1xpos r1 r2 = if x1 > x2 then GT else
-                      if x1 == x2 then EQ else LT
-    where x1 = p1x r1
-          x2 = p1x r2
+ff :: [Rectangle] -> [Rectangle] -> Rectangle -> Float
+ff [] all c       = 0 
+ff (l : lr) all c = (if null above then area_r up else (minus (p2x l) max) * (height_r up)) + ff lr all c 
+    where up         = R {p1x = p1x l,
+                          p1y = p2y l,
+                          p2x = p2x l,
+                          p2y = p2y c,
+                          rid = -1}
+          above      = filter (\x -> p1x x /= p2x l && p1x l /= p2x x && x /= l) (rs_within up all)
+          (min, max) = cover above 
+          w1         = max - min
+          w          = width_r l
+-}
+
+cover_up :: [Rectangle] -> (Float, Float)
+cover_up []               = (0, 0)
+cover_up [l]              = (p1x l, p2x l)
+cover_up (l1 : (l2 : lr)) = if x1 <= b then (min a x1, max b (p2x l1)) else (a, b) 
+    where (a, b) = cover_up (l2 : lr)
+          x1     = p1x l1
+
+cover_right :: [Rectangle] -> (Float, Float)
+cover_right []               = (0, 0)
+cover_right [l]              = (p1y l, p2y l)
+cover_right (l1 : (l2 : lr)) = if y1 <= b then (min a y1, max b (p2y l1)) else (a, b) 
+    where (a, b) = cover_right (l2 : lr)
+          y1     = p1y l1
+
+minus :: Float -> Float -> Float
+minus x y 
+    | x > y     = x - y
+    | otherwise = 0
 
 population_loop :: [[Rectangle]] -> Rectangle -> Int -> [([Rectangle], Float)]
 population_loop lr c m 
