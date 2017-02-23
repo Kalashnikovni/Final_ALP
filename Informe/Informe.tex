@@ -38,7 +38,8 @@
     \begin{center}
 \includegraphics[width=6cm, height=6cm]{logo-unr.png}
 \end{center}
-\Huge \textsc{{\bfseries T}rabajo {\bfseries P}ráctico {\bfseries F}inal: $\lambda$ - cálculo} \\
+\Huge \textsc{{\bfseries T}rabajo {\bfseries P}ráctico {\bfseries F}inal} \\
+\Huge \textsc{Bin packing de polígonos simples} \\
     \large \textsc{Análisis de lenguajes de programación} \\
 }
 
@@ -70,5 +71,58 @@ Juan Martín Rabasedas
 
 \newpage{}
 
+\section*{Sintaxis abstracta}
 \normalsize
+
+\textit
+$<$IntExp$>$ ::=
+
+    \setlength{\leftskip}{0.5cm}
+    $<$Nat$>$
+
+    $| -_{1}<$IntExp$>$
+
+    $| <$IntExp$>$ + $<$IntExp$>$ 
+
+    $| <$IntExp$>  -_{2} <$IntExp$>$ 
+
+    $| <$IntExp$>$ $\times$ $<$IntExp$>$ 
+
+    $| <$IntExp$>$ $/$ $<$IntExp$>$ 
+    
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$FloatExp$>$ ::= $<$IntExp$>$ . $<$Nat$>$
+
+\medskip
+$<$FloatList$>$ ::=
+
+    \setlength{\leftskip}{0.5cm}
+    $<$empty$>$
+
+    $| <$FloatExp$>$ : $<$FloatList$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$Polygon$>$ ::= $<$FloatExp$>$ : $<$FloatExp$>$ : $<$FloatExp$>$ : $<$FloatList$>$
+
+\medskip
+$<$Container$>$ ::= {\bfseries p1} $<$FloatExp$>$ , $<$FloatExp$>$ {\bfseries p2} $<$FloatExp$>$ , $<$FloatExp$>$ 
+
+\medskip
+$<$PolygonList$>$ ::=
+    
+    \setlength{\leftskip}{0.5cm}
+    $<$empty$>$
+
+    $| <$Polygon$>$ : $<$PolygonList$>$
+
+    \setlength{\leftskip}{0cm}
+
+\normalfont
+
+\section*{Sintaxis concreta}
+
 \end{document}
