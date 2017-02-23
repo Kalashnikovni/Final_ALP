@@ -11,4 +11,5 @@ r_to_path r = line [(x1, y1), (x1, y2), (x2, y2), (x2, y1), (x1, y1)]
           y2 = p2y r
 
 solution :: [Rectangle] -> Rectangle -> IO ()
-solution lr c = display (FullScreen (1000, 1000)) white (pictures (map r_to_path lr)) 
+solution lr c = display (FullScreen (1000, 1000)) white (pictures (map r_to_path (c : lr))) 
+

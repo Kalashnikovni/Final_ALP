@@ -4,7 +4,7 @@
 
 module Rectangles where
 
-import Polygons
+--import Polygons
 import Data.List as L
 --import SeqArray as SA 
 import System.Environment

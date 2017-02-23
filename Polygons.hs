@@ -5,16 +5,77 @@
 -- Se comienza dando la "coordenada" de un punto inicial del polígono, y de allí las coordenadas de los vértices
 -- que siguen en sentido horario.
 
+-- Se trabajará con polígonos simples
+
 module Polygons where 
 
+import qualified Rectangles as Rec
 import Data.List as List
 --import Data.Vector
 import Data.Matrix as Matrix
+import Data.Either
 import Graphics.Gloss as Gloss
+import Control.Monad.Except as Exc
 
---type Point   = (Double, Double) 
---type Polygon = [Point]
+-- ================== --
+-- Funciones de error --
+-- ================== --
 
+self_cut :: Polygon -> Bool
+self_cut
+
+-- Start point, End point
+segment_intersection :: (Point, Point) -> (Point, Point) -> Bool 
+segment_intersection (p1, p2) (p3, p4) = 
+
+-- ==================== --
+-- Funciones de cálculo --
+-- ==================== --
+
+polygon   = Polygon
+
+polygons  = Polygons
+
+translate = T
+
+-- La rotación la pensamos a partir del último punto del polígono (el tercer argumento de L)
+rotate    = R
+
+scale     = S
+
+combine   = C
+
+-- No importa que escalar el polígono tenga translación, puesto que el área del rectángulo será la misma
+min_rectangle :: Polygon -> Rectangle
+min_rectangle (L p1 p2 p3) = let x = [fst p1, fst p2, fst p3]
+                                 y = [snd p1, snd p2, snd p3]
+                             in R {p1x = minimum x,
+                                   p1y = minimum y,
+                                   p2x = maximum x,
+                                   p2y = maximum y,
+                                   rid = -1}
+min_rectangle (P pt pn)    = let r = min_rectangle pn
+                                 x = fst pt
+                                 y = snd pt
+                             in R {p1x = min x (p1x r),
+                                   p1y = min y (p1y r),
+                                   p2x = max x (p2x r),
+                                   p2y = max y (p2y r),
+                                   rid = -1}
+min_rectangle (T pt pn)    = min_rectangle pn
+--min_rectangle (R ang pn)   =
+min_rectangle (S fac pn)   = 
+
+
+--pip :: Point -> Polygon -> Bool
+--pip pt (L pt2)    = True
+--pip pt (P pt2 pn) = 
+--pip pt (T pt2 pn)  = pip (fst pt - fst pt2, snd pt - snd pt2) pn 
+--pip pt (R ang pn)  = pip pt pn 
+--pip pt (S fac pn)  = pip () pn
+--pip pt (C pn1 pn2) = pip pt pn1 || pip pt pn2
+
+{-
 -- Funciones de acceso al tipo de datos "Point".
 get_px :: Point -> Float
 get_px (x, y) = x
@@ -87,6 +148,4 @@ pol_rotate :: Path -> Float -> Path
 pol_rotate py rad = List.map (\(x, y) -> (x * c - y * s, y * c + x * s)) py
     where c = cos rad
           s = sin rad
-
-
-
+-}
