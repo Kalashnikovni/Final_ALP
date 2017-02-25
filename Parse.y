@@ -6,6 +6,7 @@ import AST
 
 -- Módulos prestados
 import Data.Char
+import Data.List
 import Graphics.Gloss
 import Control.Applicative 
 import Control.Monad (liftM, ap)
@@ -13,7 +14,6 @@ import Control.Monad (liftM, ap)
 
 %name parseDef DefExp
 %name parseDefs Defs
-%name parseExample Container
 
 %tokentype { Token }
 %error     { parseError }
@@ -26,10 +26,9 @@ import Control.Monad (liftM, ap)
     '/'         { TDiv       }
     '='         { TEqual     }
     ':'         { TColon     }
-    '['         { TSBracketO }
-    ']'         { TSBracketC }
     '('         { TParenO    }
     ')'         { TParenC    } 
+    '++'        { TConcat    } 
     NAME        { TName $$   }
     POL         { TPol       }           
     CON         { TCon       }
@@ -38,9 +37,10 @@ import Control.Monad (liftM, ap)
     Y           { TY         }
     P1          { TPoint1    }
     P2          { TPoint2    }
+    EMPTYL      { TEmpty     }
 
-%left X Y
-%left FLOAT
+%right ':'
+%left  '++'
 
 %%
 
@@ -68,15 +68,15 @@ Atom       : FLOAT            { $1 }
 Point      :: { Point }
 Point      : X FloatExp Y FloatExp { ($2, $4) }
 
-PointList  : '[' ']'             { []      }
+PointList  : EMPTYL              { []      }
            | Point ':' PointList { $1 : $3 }
 
 Polygon    :: { Polygon }
 Polygon    : Point ':' Point ':' Point ':' PointList { P ($1 : ($3 : ($5 : $7))) }
 
 Polygons   :: { Polygons }
-Polygons   : '[' ']'              { Ps [] }
-           | Polygon ':' Polygons { case $3 of
+Polygons   : EMPTYL                { Ps [] }
+           | Polygon '++' Polygons { case $3 of
                                         Ps xs -> Ps ($1 : xs)
                                         _     -> Ps [] }
 
@@ -84,7 +84,7 @@ Container  :: { Container }
 Container  : P1 Point P2 Point   { C $2 $4 }
 
 Containers :: { Containers }
-Containers : '[' ']'                  { Cs [] }
+Containers : EMPTYL                   { Cs [] }
            | Container ':' Containers { case $3 of
                                             Cs xs -> Cs ($1 : xs)
                                             _     -> Cs []}
@@ -142,6 +142,7 @@ data Token
     | TSBracketC 
     | TParenO    
     | TParenC     
+    | TConcat
     | TPol
     | TCon
     | TName String
@@ -154,7 +155,8 @@ data Token
     | TPoint1    
     | TPoint2    
     | TContainer 
-    deriving Show
+    | TEmpty
+    deriving (Eq, Show)
 
 -- ================= --
 -- ===== LEXER ===== --
@@ -170,114 +172,62 @@ lexer ('+':cs) = TPlus : lexer cs
 lexer ('-':cs) = TMinus : lexer cs
 lexer ('*':cs) = TTimes : lexer cs
 lexer ('/':cs) = TDiv : lexer cs
+lexer ('=':cs) = TEqual : lexer cs
 lexer ('(':cs) = TParenO : lexer cs
 lexer (')':cs) = TParenC : lexer cs
-lexer ('[':cs) = TSBracketO : lexList cs
-lexer (']':cs) = TSBracketC : lexer cs
-lexer (',':cs) = TComma : lexer cs
-lexer (':':cs) = TColon : lexer cs
+lexer ('[':cs) = lexList cs
+lexer (']':cs) = getRBracket1 cs ++ lexer cs
+lexer (',':cs) = getRBracket2 cs ++ lexer cs
+
+getRBracket1 :: String -> [Token]
+getRBracket1 [] = [TColon, TEmpty]
+getRBracket1 (c:cs)
+    | isSpace c = getRBracket1 cs
+    | c == ']'  = [TColon, TEmpty, TConcat, TEmpty]
+    | otherwise = [TColon, TEmpty]
+
+getRBracket2 :: String -> [Token]
+getRBracket2 [] = []
+getRBracket2 (c:cs)
+    | isSpace c = getRBracket2 cs
+    | c == '['  = [TConcat]
+    | otherwise = [TColon]
 
 lexNum :: String -> (String -> [Token]) -> [Token]
 lexNum [] _ = []
 lexNum cs f = if null res 
-              then fromInt
+              then fromInt 
               else if fres == '.' 
                    then let (float, res') = span isDigit (drop 1 res) 
                    in TFloat ((read int :: Float) + ((read float :: Float) / (fromIntegral (10 ^ length float) :: Float))) : (f res')  
-                   else if fres == ' ' then fromInt else [] 
+                   else fromInt 
     where (int, res) = span isDigit cs  
           fres       = head res
           fromInt    = TFloat (read int :: Float) : (f res)
-
-lexString :: String -> [Token]
-lexString [] = []
-lexString (c:cs) = case span isAlpha of
-                    ("pdef", res) -> TPol : lexer res
-                    ("cdef", res) -> TCon : lexer res
-                    ("P1", res)   -> TPoint1 : lexer res
-                    ("P2", res)   -> TPoint2 : lexer res
-                    ("X", res)    -> TX : lexer res
-                    ("Y", res)    -> TY : lexer res   
-
-{-lexer :: String -> [Token]
-lexer []        = []
-lexer (c : cs) 
-    | isSpace c = lexer cs
-    | isAlpha c = lexString (c:cs)
-    | isDigit c = lexNum (c:cs) lexer
-lexer ('\n':cs) = lexer cs
---lexer ('P':('1':cs)) = TPoint1 : lexPoint1 cs
---lexer ('P':('2':cs)) = TPoint2 : lexPoint1 cs
-lexer ('+':cs) = TPlus : lexer cs
-lexer ('-':cs) = TMinus : lexer cs
-lexer ('*':cs) = TTimes : lexer cs
-lexer ('/':cs) = TDiv : lexer cs
-lexer ('(':cs) = TParenO : lexer cs
-lexer (')':cs) = TParenC : lexer cs
-lexer ('[':cs) = TSBracketO : lexList cs
-lexer (']':cs) = TSBracketC : lexer cs
-lexer (',':cs) = TComma : lexer cs
-lexer (':':cs) = TColon : lexer cs
-
-lexNum :: String -> (String -> [Token]) -> [Token]
-lexNum [] _ = []
-lexNum cs f = if null res 
-              then fromInt
-              else if fres == '.' 
-                   then let (float, res') = span isDigit (drop 1 res) 
-                   in TFloat ((read int :: Float) + ((read float :: Float) / (fromIntegral (10 ^ length float) :: Float))) : (f res')  
-                   else if fres == ' ' then fromInt else [] 
-    where (int, res) = span isDigit cs  
-          fres       = head res
-          fromInt    = TFloat (read int :: Float) : (f res)
-
-lexPoint1 :: String -> (String -> [Token]) -> [Token]
-lexPoint1 []       f = []
-lexPoint1 ('X':cs) f = TX : lexPoint2 cs lexPoint1 
-lexPoint1 ('Y':cs) f = TY : lexPoint2 cs f
-lexPoint1 (c:cs)
-    | isSpace c = lexPoint1 cs
-
-lexPoint2 :: String -> (String -> [Token]) -> [Token]
-lexPoint2 [] _     = []
-lexPoint2 (c:cs) f
-    | isSpace c = lexPoint2 cs f
-    | isDigit c = lexNum (c:cs) f
 
 lexString :: String -> [Token]
 lexString []     = []
-lexString (c:cs) = 
-    | isSpace c = lexString cs
-    | otherwise = case span isAlpha cs of
-                    ("pdef", res) -> TPol : lexString res 
-                    ("cdef", res) -> TCon : lexString res
-                    (name, res)   -> TName name : lexDef res
-
-lexDef :: String -> [Token]
-lexDef []     = []
-lexDef (c:cs) 
-    | isSpace c = lexDef cs 
-    | otherwise = case c of
-                    '=' -> TEqual 
-                    _   -> [] 
+lexString (c:cs) = case span isAlpha (c:cs) of
+                    ("pdef", res) -> TPol : lexer res
+                    ("cdef", res) -> TCon : lexer res
+                    ("X", res)    -> TX : lexer res
+                    ("Y", res)    -> TY : lexer res   
+                    (po, res)     -> if po == "P"
+                                     then let (num, res') = span isDigit res
+                                          in if num == "1" 
+                                             then TPoint1 : lexer res'
+                                             else if num == "2"
+                                                  then TPoint2 : lexer res'
+                                                  else [] 
+                                     else let (name, res') = span isAlphaNum (po ++ res)
+                                          in TName name : lexer res'  
 
 lexList :: String -> [Token]
 lexList []     = []
-lexList (c:cs) 
-    | isSpace c = lexList cs
-    | c == 'X'  = lexPolygon (c:cs)
-    | c == 'P'  = lexContainer (c:cs)
-    | otherwise = []
-
-lexPolygon :: String -> [Token]
-lexPolygon []       = []
-lexPolygon ('X':cs) = lexComma (lexPoint1 ('X':cs) lexPolygon)
-
-lexComma :: String -> (String -> [Token]) -> [Token]
-lexComma [] = []
-lexComma (c:cs)
-    | isSpace c = lexComma cs
-    | c == ','  = TComma : 
--}
+lexList (c:cs) = case span (\x -> isAlpha x || isDigit x || isPunctuation x) (c:cs) of
+                    ("X", res)  -> TX : lexer res
+                    ("[", res)  -> TConcat : lexer res 
+                    ("P1", res) -> TPoint1 : lexer res
+                    _           -> lexer (c:cs)
 
 }
