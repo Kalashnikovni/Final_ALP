@@ -161,22 +161,18 @@ data Token
 -- ================= --
 
 lexer :: String -> [Token]
-lexer []        = []
-lexer ('\n':cs) = lexer cs
-lexer ('X':cs)       = lexPoint1 ('X':cs)
-lexer ('P':('1':cs)) = TPoint1 : lexPoint1 cs
-lexer ('P':('2':cs)) = TPoint2 : lexPoint1 cs
-lexer (c : cs) 
+lexer []       = []
+lexer (c:cs)
     | isSpace c = lexer cs
-    | isDigit c = lexNum (c:cs) lexer
     | isAlpha c = lexString (c:cs)
+    | isDigit c = lexNum (c:cs) lexer
 lexer ('+':cs) = TPlus : lexer cs
 lexer ('-':cs) = TMinus : lexer cs
 lexer ('*':cs) = TTimes : lexer cs
 lexer ('/':cs) = TDiv : lexer cs
 lexer ('(':cs) = TParenO : lexer cs
 lexer (')':cs) = TParenC : lexer cs
-lexer ('[':cs) = TSBracketO : lexer cs
+lexer ('[':cs) = TSBracketO : lexList cs
 lexer (']':cs) = TSBracketC : lexer cs
 lexer (',':cs) = TComma : lexer cs
 lexer (':':cs) = TColon : lexer cs
@@ -193,10 +189,52 @@ lexNum cs f = if null res
           fres       = head res
           fromInt    = TFloat (read int :: Float) : (f res)
 
-lexPoint1 :: String -> [Token]
-lexPoint1 []      = []
-lexPoint1 ('X':cs) = TX : lexPoint2 cs lexPoint1
-lexPoint1 ('Y':cs) = TY : lexPoint2 cs lexer
+lexString :: String -> [Token]
+lexString [] = []
+lexString (c:cs) = case span isAlpha of
+                    ("pdef", res) -> TPol : lexer res
+                    ("cdef", res) -> TCon : lexer res
+                    ("P1", res)   -> TPoint1 : lexer res
+                    ("P2", res)   -> TPoint2 : lexer res
+                    ("X", res)    -> TX : lexer res
+                    ("Y", res)    -> TY : lexer res   
+
+{-lexer :: String -> [Token]
+lexer []        = []
+lexer (c : cs) 
+    | isSpace c = lexer cs
+    | isAlpha c = lexString (c:cs)
+    | isDigit c = lexNum (c:cs) lexer
+lexer ('\n':cs) = lexer cs
+--lexer ('P':('1':cs)) = TPoint1 : lexPoint1 cs
+--lexer ('P':('2':cs)) = TPoint2 : lexPoint1 cs
+lexer ('+':cs) = TPlus : lexer cs
+lexer ('-':cs) = TMinus : lexer cs
+lexer ('*':cs) = TTimes : lexer cs
+lexer ('/':cs) = TDiv : lexer cs
+lexer ('(':cs) = TParenO : lexer cs
+lexer (')':cs) = TParenC : lexer cs
+lexer ('[':cs) = TSBracketO : lexList cs
+lexer (']':cs) = TSBracketC : lexer cs
+lexer (',':cs) = TComma : lexer cs
+lexer (':':cs) = TColon : lexer cs
+
+lexNum :: String -> (String -> [Token]) -> [Token]
+lexNum [] _ = []
+lexNum cs f = if null res 
+              then fromInt
+              else if fres == '.' 
+                   then let (float, res') = span isDigit (drop 1 res) 
+                   in TFloat ((read int :: Float) + ((read float :: Float) / (fromIntegral (10 ^ length float) :: Float))) : (f res')  
+                   else if fres == ' ' then fromInt else [] 
+    where (int, res) = span isDigit cs  
+          fres       = head res
+          fromInt    = TFloat (read int :: Float) : (f res)
+
+lexPoint1 :: String -> (String -> [Token]) -> [Token]
+lexPoint1 []       f = []
+lexPoint1 ('X':cs) f = TX : lexPoint2 cs lexPoint1 
+lexPoint1 ('Y':cs) f = TY : lexPoint2 cs f
 lexPoint1 (c:cs)
     | isSpace c = lexPoint1 cs
 
@@ -220,7 +258,26 @@ lexDef []     = []
 lexDef (c:cs) 
     | isSpace c = lexDef cs 
     | otherwise = case c of
-                    '=' -> TEqual
+                    '=' -> TEqual 
                     _   -> [] 
+
+lexList :: String -> [Token]
+lexList []     = []
+lexList (c:cs) 
+    | isSpace c = lexList cs
+    | c == 'X'  = lexPolygon (c:cs)
+    | c == 'P'  = lexContainer (c:cs)
+    | otherwise = []
+
+lexPolygon :: String -> [Token]
+lexPolygon []       = []
+lexPolygon ('X':cs) = lexComma (lexPoint1 ('X':cs) lexPolygon)
+
+lexComma :: String -> (String -> [Token]) -> [Token]
+lexComma [] = []
+lexComma (c:cs)
+    | isSpace c = lexComma cs
+    | c == ','  = TComma : 
+-}
 
 }
