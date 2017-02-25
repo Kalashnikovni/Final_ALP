@@ -1,7 +1,50 @@
 module AST where
 
 -- Módulos prestados
-import Graphics.Gloss
+import Graphics.Gloss 
+
+data Def        = Dp String Polygon
+                  | Dc String Container deriving Show
+
+data Polygon    = P [Point] deriving Show
+
+data Polygons   = Ps [Polygon] deriving Show
+
+data Container  = C Point Point deriving Show 
+                 
+data Containers = Cs [Container] deriving Show
+
+--data Exp        = E Polygons Containers deriving Show
+
+--data Exp        = E Containers Polygons deriving Show
+
+--data NumExp    = IE Int -- IntExp
+--                 | FE Float -- FloatExp 
+
+{-data Digit = Zero 
+             | One 
+             | Two 
+             | Three 
+             | Four 
+             | Five 
+             | Six 
+             | Seven 
+             | Eight 
+             | Nine
+
+data Nat    = Digit
+              | Digit Nat 
+
+data IntExp = Cons Integer
+              | SMinus IntExp
+              | Plus IntExp IntExp
+              | Minus IntExp IntExp
+              | Times IntExp IntExp
+              | Div IntExp IntExp
+
+data FloatExp = F IntExp Nat
+
+data 
 
 type Segment  = (Point, Point)
 
@@ -18,4 +61,5 @@ data PolError = ThreeInLine -- Error que indica que tres puntos consecutivos se 
 type PolMonad = Either PolError
 
 data Polygons = C Polygon Polygon | E deriving Show -- Combine
+-}
 
