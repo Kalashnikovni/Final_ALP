@@ -9,62 +9,38 @@
 
 module Polygons where 
 
-import qualified Rectangles as Rec
+-- Módulos propios
+import Common
+
+-- Módulos prestados
+-- import qualified Rectangles as Rec
 import Data.List as List
---import Data.Vector
+-- import Data.Vector
 import Data.Matrix as Matrix
 import Data.Either
 import Graphics.Gloss as Gloss
+import Graphics.Gloss.Geometry.Line as GlossLine
 import Control.Monad.Except as Exc
 
--- ================== --
--- Funciones de error --
--- ================== --
+-- ============================ --
+-- Chequeo de polígonos válidos --
+-- ============================ --
 
-self_cut :: Polygon -> Bool
-self_cut
+valid_pol :: Polygon -> Maybe Polygon
+valid_pol (P xs)
+    | length xs < 3 = Nothing
+    | otherwise     = if valid_pol' (xs ++ [head xs]) then Just (P xs) else Nothing
 
--- Start point, End point
-segment_intersection :: (Point, Point) -> (Point, Point) -> Bool 
-segment_intersection (p1, p2) (p3, p4) = 
+valid_pol' :: [Point] -> Bool
+valid_pol' (x:(y:ys)) = not (Polygons.compare x y ys) && (valid_pol' (y:ys))
+valid_pol' _          = True
 
--- ==================== --
--- Funciones de cálculo --
--- ==================== --
+compare :: Point -> Point -> [Point] -> Bool   
+compare x y (z1:(z2:zs)) = case intersectSegSeg x y z1 z2 of
+                            Nothing -> Polygons.compare x y (z2:zs)
+                            Just p  -> if p == x || p == y then False else True  
+compare x y _            = False
 
-polygon   = Polygon
-
-polygons  = Polygons
-
-translate = T
-
--- La rotación la pensamos a partir del último punto del polígono (el tercer argumento de L)
-rotate    = R
-
-scale     = S
-
-combine   = C
-
--- No importa que escalar el polígono tenga translación, puesto que el área del rectángulo será la misma
-min_rectangle :: Polygon -> Rectangle
-min_rectangle (L p1 p2 p3) = let x = [fst p1, fst p2, fst p3]
-                                 y = [snd p1, snd p2, snd p3]
-                             in R {p1x = minimum x,
-                                   p1y = minimum y,
-                                   p2x = maximum x,
-                                   p2y = maximum y,
-                                   rid = -1}
-min_rectangle (P pt pn)    = let r = min_rectangle pn
-                                 x = fst pt
-                                 y = snd pt
-                             in R {p1x = min x (p1x r),
-                                   p1y = min y (p1y r),
-                                   p2x = max x (p2x r),
-                                   p2y = max y (p2y r),
-                                   rid = -1}
-min_rectangle (T pt pn)    = min_rectangle pn
---min_rectangle (R ang pn)   =
-min_rectangle (S fac pn)   = 
 
 
 --pip :: Point -> Polygon -> Bool
