@@ -1,24 +1,34 @@
-module AST where
+module Common where
 
--- Módulos prestados
-import Graphics.Gloss 
+type MyPoint       = (Float, Float)
 
-data Def        = Dp String Polygon Float -- ID, def. del polígono y escalamiento 
-                  | Dc String Container Float deriving Show
+data Def           = Dp String Polygon Float -- ID, def. del polígono y escalamiento 
+                     | Dc String Container Float deriving Show
 
-data Polygon    = P [Point] deriving Show
+newtype Polygon    = P [MyPoint] deriving Show
 
-data Polygons   = Ps [Polygon] deriving Show
+newtype Polygons   = Ps [Polygon] deriving Show
 
-data Container  = C Point Point deriving Show 
+data Container     = C {p1x :: Float,
+                        p1y :: Float,
+                        p2x :: Float,
+                        p2y :: Float,
+                        rid :: Int} deriving (Show, Eq) 
                  
-data Containers = Cs [Container] deriving Show
+newtype Containers = Cs [Container] deriving Show
 
 -- Representamos un rectángulo de acuerdo a su diagonal "de izquierda a derecha, de abajo hacia arriba". 
 -- Es decir, con un vector del cuadrante I.
 -- El int representa el id del rectángulo.
-data Rectangle = R {p1x :: Float,
+{-data Rectangle = R {p1x :: Float,
                     p1y :: Float,
                     p2x :: Float,
                     p2y :: Float,
                     rid :: Int} deriving (Show, Eq)
+-}
+
+-- Tipos para archivos SVG --
+-----------------------------
+newtype DExp = D String deriving Show
+
+type SVGExp  = [DExp]
