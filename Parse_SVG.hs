@@ -8,45 +8,36 @@ import Common
 import Data.Char
 import Data.List
 import Graphics.SVG.ReadPath
-import Control.Applicative 
-import Control.Monad (liftM, ap)
 
 -- parser produced by Happy Version 1.19.0
 
-data HappyAbsSyn t4 t5
+data HappyAbsSyn t4
 	= HappyTerminal (Token)
 	| HappyErrorToken Int
 	| HappyAbsSyn4 t4
-	| HappyAbsSyn5 t5
 
-action_0 (8) = happyShift action_2
+action_0 (6) = happyShift action_2
 action_0 (4) = happyGoto action_3
 action_0 _ = happyReduce_2
 
-action_1 (8) = happyShift action_2
+action_1 (6) = happyShift action_2
 action_1 _ = happyFail
 
-action_2 (6) = happyShift action_5
-action_2 (5) = happyGoto action_4
+action_2 (5) = happyShift action_4
 action_2 _ = happyFail
 
-action_3 (9) = happyAccept
+action_3 (7) = happyAccept
 action_3 _ = happyFail
 
-action_4 (8) = happyShift action_2
-action_4 (4) = happyGoto action_7
+action_4 (6) = happyShift action_2
+action_4 (4) = happyGoto action_5
 action_4 _ = happyReduce_2
 
-action_5 (7) = happyShift action_6
-action_5 _ = happyFail
-
-action_6 _ = happyReduce_3
-
-action_7 _ = happyReduce_1
+action_5 _ = happyReduce_1
 
 happyReduce_1 = happySpecReduce_3  4 happyReduction_1
 happyReduction_1 (HappyAbsSyn4  happy_var_3)
-	(HappyAbsSyn5  happy_var_2)
+	(HappyTerminal (TString happy_var_2))
 	_
 	 =  HappyAbsSyn4
 		 (happy_var_2 : happy_var_3
@@ -58,83 +49,95 @@ happyReduction_2  =  HappyAbsSyn4
 		 ([]
 	)
 
-happyReduce_3 = happySpecReduce_2  5 happyReduction_3
-happyReduction_3 (HappyTerminal (TString happy_var_2))
-	_
-	 =  HappyAbsSyn5
-		 (D happy_var_2
-	)
-happyReduction_3 _ _  = notHappyAtAll 
-
-happyNewToken action sts stk [] =
-	action 9 9 notHappyAtAll (HappyState action) sts stk []
-
-happyNewToken action sts stk (tk:tks) =
-	let cont i = action i i tk (HappyState action) sts stk tks in
+happyNewToken action sts stk
+	= lexer(\tk -> 
+	let cont i = action i i tk (HappyState action) sts stk in
 	case tk of {
-	TD -> cont 6;
-	TString happy_dollar_dollar -> cont 7;
-	TPath -> cont 8;
-	_ -> happyError' (tk:tks)
-	}
+	TEof -> action 7 7 tk (HappyState action) sts stk;
+	TString happy_dollar_dollar -> cont 5;
+	TPath -> cont 6;
+	_ -> happyError' tk
+	})
 
-happyError_ 9 tk tks = happyError' tks
-happyError_ _ tk tks = happyError' (tk:tks)
+happyError_ 7 tk = happyError' tk
+happyError_ _ tk = happyError' tk
 
-happyThen :: () => E a -> (a -> E b) -> E b
+happyThen :: () => P a -> (a -> P b) -> P b
 happyThen = (thenE)
-happyReturn :: () => a -> E a
+happyReturn :: () => a -> P a
 happyReturn = (returnE)
-happyThen1 m k tks = (thenE) m (\a -> k a tks)
-happyReturn1 :: () => a -> b -> E a
-happyReturn1 = \a tks -> (returnE) a
-happyError' :: () => [(Token)] -> E a
-happyError' = parseError
+happyThen1 = happyThen
+happyReturn1 :: () => a -> P a
+happyReturn1 = happyReturn
+happyError' :: () => (Token) -> P a
+happyError' tk = parseError tk
 
-parseSVG tks = happySomeParser where
-  happySomeParser = happyThen (happyParse action_0 tks) (\x -> case x of {HappyAbsSyn4 z -> happyReturn z; _other -> notHappyAtAll })
+parseSVG = happySomeParser where
+  happySomeParser = happyThen (happyParse action_0) (\x -> case x of {HappyAbsSyn4 z -> happyReturn z; _other -> notHappyAtAll })
 
 happySeq = happyDontSeq
 
 
-data E a = Ok a | Failed String
+data PR a = Ok a 
+            | Failed String deriving Show
 
-thenE :: E a -> (a -> E b) -> E b
-m `thenE` k = 
-   case m of 
-       Ok a     -> k a
-       Failed e -> Failed e
+type LineNumber = Int
 
-returnE :: a -> E a
-returnE a = Ok a
+type P a  = String -> LineNumber -> PR a 
 
-failE :: String -> E a
-failE err = Failed err
+returnE :: a -> P a
+returnE v = \s l -> Ok v
 
-catchE :: E a -> (String -> E a) -> E a
-catchE m k = 
-   case m of
-      Ok a     -> Ok a
-      Failed e -> k e
+thenE :: P a -> (a -> P b) -> P b
+thenE m k = \s l -> case m s l of
+                        Ok v      -> k v s l
+                        Failed s' -> Failed s'
 
-parseError :: [Token] -> E a
-parseError _ = failE "Parse error"
+failE :: String -> P a
+failE v = \s l -> Failed v
 
-printError :: Show a => E a -> IO ()
-printError (Ok v)     = print v
-printError (Failed s) = print "Error"
+catchE :: P a -> (String -> P a) -> P a
+catchE m k = \s l -> case m s l of
+                        Ok v      -> Ok v
+                        Failed s' -> k s' s l
+
+parseError :: Token -> P a
+parseError _ = \s l -> failE ("Error de parseo en la línea " ++ show l) s l
 
 data Token   
-    = TD
-    | TPath
+    = TPath
     | TString String 
+    | TEof
     deriving (Eq, Show)
 
 -- ================= --
 -- ===== LEXER ===== --
 -- ================= --
 
-lexer :: String -> [Token]
+--lexer :: (Token -> P a) -> P a
+lexer cont []           = cont TEof []
+lexer cont (c:('d':cs)) = if isSpace c || c == '\n' then lexerD cont cs else lexer cont cs
+lexer cont ('\n':cs)    = \l -> lexer cont cs (l + 1)
+lexer cont (c:cs)
+    | isSpace c = lexer cont cs
+    | c == '<'  = lexPath cont cs
+    | otherwise = lexer cont cs
+
+lexerD cont [] = cont TEof []
+lexerD cont (c:cs)      
+    | isSpace c = lexerD cont cs
+    | c == '='  = let (x, res) = (takeWhile (/= '\"') (drop 1 cs), dropWhile (/= '\"') (drop 1 cs))
+                  in cont (TString x) res
+    | otherwise = lexer cont cs
+
+lexPath cont []     = cont TEof []
+lexPath cont (c:cs) = case span isAlpha (c:cs) of
+                        ("path", res) -> cont TPath res
+                        (_, res)      -> lexer cont res
+
+parsesvg s = parseSVG s 1
+
+{-lexer :: String -> [Token]
 lexer []        = []
 lexer (c:('d':cs)) = if isSpace c || c == '\n' then lexerD cs else lexer cs
 lexer ('\n':cs) = lexer cs
@@ -142,6 +145,7 @@ lexer (c:cs)
     | isSpace c = lexer cs
     | c == '<'  = lexPath cs
     | otherwise = lexer cs
+
 
 lexPath :: String -> [Token]
 lexPath []     = []
@@ -155,7 +159,7 @@ lexerD (c:cs)
     | isSpace c = lexerD cs
     | c == '='  = let (x, res) = (takeWhile (/= '\"') (drop 1 cs), dropWhile (/= '\"') (drop 1 cs))
                   in TD : (TString x : lexer res)
-    | otherwise = lexer cs
+    | otherwise = lexer cs-}
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 {-# LINE 1 "templates/GenericTemplate.hs" #-}
 {-# LINE 1 "<command-line>" #-}

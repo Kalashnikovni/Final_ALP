@@ -7,88 +7,83 @@ import Common
 -- Módulos prestados
 import Data.Char
 import Data.List
-import Graphics.SVG.ReadPath
-import Control.Applicative 
-import Control.Monad (liftM, ap)
 }
 
 %name parseSVG SVGExp
 
 %tokentype { Token }
 %error     { parseError }
-%monad     { E } { thenE } { returnE }
+%monad     { P } { thenE } { returnE }
+%lexer     { lexer } { TEof }
 
 %token
-    D           { TD         }
     STRING      { TString $$ }
     PATH        { TPath      }   
 
-%right ':'
-
 %%
 
-SVGExp : PATH DExp SVGExp { $2 : $3 }
-       |                  { []      }
-
-DExp   : D STRING         { D $2 }
+SVGExp : PATH STRING SVGExp { $2 : $3 }
+       |                    { []      }
  
 
 {
 
-data E a = Ok a | Failed String
+data PR a = Ok a 
+            | Failed String deriving Show
 
-thenE :: E a -> (a -> E b) -> E b
-m `thenE` k = 
-   case m of 
-       Ok a     -> k a
-       Failed e -> Failed e
+type LineNumber = Int
 
-returnE :: a -> E a
-returnE a = Ok a
+type P a  = String -> LineNumber -> PR a 
 
-failE :: String -> E a
-failE err = Failed err
+returnE :: a -> P a
+returnE v = \s l -> Ok v
 
-catchE :: E a -> (String -> E a) -> E a
-catchE m k = 
-   case m of
-      Ok a     -> Ok a
-      Failed e -> k e
+thenE :: P a -> (a -> P b) -> P b
+thenE m k = \s l -> case m s l of
+                        Ok v      -> k v s l
+                        Failed s' -> Failed s'
 
-parseError :: [Token] -> E a
-parseError _ = failE "Parse error"
+failE :: String -> P a
+failE v = \s l -> Failed v
+
+catchE :: P a -> (String -> P a) -> P a
+catchE m k = \s l -> case m s l of
+                        Ok v      -> Ok v
+                        Failed s' -> k s' s l
+
+parseError :: Token -> P a
+parseError _ = \s l -> failE ("Error de parseo en la línea " ++ show l) s l
 
 data Token   
-    = TD
-    | TPath
+    = TPath
     | TString String 
+    | TEof
     deriving (Eq, Show)
 
 -- ================= --
 -- ===== LEXER ===== --
 -- ================= --
 
-lexer :: String -> [Token]
-lexer []        = []
-lexer (c:('d':cs)) = if isSpace c || c == '\n' then lexerD cs else lexer cs
-lexer ('\n':cs) = lexer cs
-lexer (c:cs)
-    | isSpace c = lexer cs
-    | c == '<'  = lexPath cs
-    | otherwise = lexer cs
+lexer cont []           = cont TEof []
+lexer cont (c:('d':cs)) = if isSpace c || c == '\n' then lexerD cont cs else lexer cont cs
+lexer cont ('\n':cs)    = \l -> lexer cont cs (l + 1)
+lexer cont (c:cs)
+    | isSpace c = lexer cont cs
+    | c == '<'  = lexPath cont cs
+    | otherwise = lexer cont cs
 
-lexPath :: String -> [Token]
-lexPath []     = []
-lexPath (c:cs) = case span isAlpha (c:cs) of
-                    ("path", res) -> TPath : lexer res
-                    (_, res)      -> lexer res
-
-lexerD :: String -> [Token]
-lexerD [] = []
-lexerD (c:cs)      
-    | isSpace c = lexerD cs
+lexerD cont [] = cont TEof []
+lexerD cont (c:cs)      
+    | isSpace c = lexerD cont cs
     | c == '='  = let (x, res) = (takeWhile (/= '\"') (drop 1 cs), dropWhile (/= '\"') (drop 1 cs))
-                  in TD : (TString x : lexer res)
-    | otherwise = lexer cs
+                  in cont (TString x) res
+    | otherwise = lexer cont cs
+
+lexPath cont []     = cont TEof []
+lexPath cont (c:cs) = case span isAlpha (c:cs) of
+                        ("path", res) -> cont TPath res
+                        (_, res)      -> lexer cont res
+
+parsesvg s = parseSVG s 1
 
 }
