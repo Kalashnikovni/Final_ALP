@@ -1,13 +1,13 @@
+
 {
 module Parse where
     
 -- Módulos propios
-import AST
+import Common
 
 -- Módulos prestados
 import Data.Char
 import Data.List
-import Graphics.Gloss
 import Control.Applicative 
 import Control.Monad (liftM, ap)
 }
@@ -17,7 +17,8 @@ import Control.Monad (liftM, ap)
 
 %tokentype { Token }
 %error     { parseError }
-%monad     { E } { thenE } { returnE }
+%monad     { P } { thenE } { returnE }
+%lexer     { lexer } { TEof }
 
 %token
     '+'         { TPlus      }
@@ -28,11 +29,16 @@ import Control.Monad (liftM, ap)
     ':'         { TColon     }
     '('         { TParenO    }
     ')'         { TParenC    } 
-    '++'        { TConcat    } 
+    'x'         { TCopy      }
+    ','         { TComma     }
+    ';'         { TPComma    }
+    KERF        { TKerf      }
     NAME        { TName $$   }
     POL         { TPol       }           
+    SCALE       { TScale     }
     CON         { TCon       }
     FLOAT       { TFloat $$  }
+    INT         { TNat $$    }
     X           { TX         }
     Y           { TY         }
     P1          { TPoint1    }
@@ -40,13 +46,14 @@ import Control.Monad (liftM, ap)
     EMPTYL      { TEmpty     }
 
 %right ':'
-%left  '++'
 
 %%
 
-DefExp     : POL NAME '=' Polygon   { Dp $2 $4 }
-           | CON NAME '=' Container { Dc $2 $4 }  
+Machine    : KERF FloatExp Defs { $2 }
 
+DefExp     : POL NAME '=' Polygon   { Dp $2 $4 1 }
+           | CON NAME '=' Container { Dc $2 $4 1 }  
+ 
 FloatExp   :: { Float }
 FloatExp   : FloatExp '+' Term { $1 + $3 }
            | FloatExp '-' Term { $1 - $3 }
@@ -65,70 +72,65 @@ Atom       :: { Float }
 Atom       : FLOAT            { $1 } 
            | '(' FloatExp ')' { $2 }
          
-Point      :: { Point }
+Point      :: { MyPoint }
 Point      : X FloatExp Y FloatExp { ($2, $4) }
 
-PointList  : EMPTYL              { []      }
-           | Point ':' PointList { $1 : $3 }
+PointList  : EMPTYL          { []      }
+           | Point PointList { $1 : $2 }
 
 Polygon    :: { Polygon }
-Polygon    : Point ':' Point ':' Point ':' PointList { P ($1 : ($3 : ($5 : $7))) }
-
-Polygons   :: { Polygons }
-Polygons   : EMPTYL                { Ps [] }
-           | Polygon '++' Polygons { case $3 of
-                                        Ps xs -> Ps ($1 : xs)
-                                        _     -> Ps [] }
+Polygon    : Point Point Point PointList { P ($1 : ($2 : ($3 : $4))) }
 
 Container  :: { Container }
-Container  : P1 Point P2 Point   { C $2 $4 }
+Container  : P1 Point P2 Point   { C { p1x = fst $2, p1y = snd $2, p2x = fst $4, p2y = snd $4, rid = 0 } }
 
-Containers :: { Containers }
-Containers : EMPTYL                   { Cs [] }
-           | Container ':' Containers { case $3 of
-                                            Cs xs -> Cs ($1 : xs)
-                                            _     -> Cs []}
-
-Defs       : DefExp Defs { $1 : $2 }
-           |             { []      }
+Defs       : DefExp ',' Defs { $1 : $3 }
+           |                 { []      }
+           | POL NAME '=' Polygon 'x' FLOAT SCALE FLOAT ';' Defs   { %if $8 < 0 
+                                                                    then failE "El escalamiento debe ser positivo"
+                                                                    else returnE ([Dp $2 $4 $8]) }
+           | CON NAME '=' Container 'x' FLOAT SCALE FLOAT ';' Defs { %if $8 < 0
+                                                                    then failE "El escalamiento debe ser positivo"
+                                                                    else returnE (copytimes (Dc $2 $4 $8) (floor $6) ++ $10) } 
 
 
 {
 
-{-instance Functor HappyIdentity where
-  fmap = liftM
+copytimes :: a -> Int -> [a]
+copytimes v times
+    | times == 0 = []
+    | otherwise  = v : (copytimes v (times - 1))
 
-instance Applicative HappyIdentity where
-  pure  = return
-  (<*>) = ap-}
+data PR a = Ok a 
+            | Failed String deriving Show
 
-data E a = Ok a | Failed String
+type LineNumber = Int
 
-thenE :: E a -> (a -> E b) -> E b
-m `thenE` k = 
-   case m of 
-       Ok a     -> k a
-       Failed e -> Failed e
+type P a  = String -> LineNumber -> PR a 
 
-returnE :: a -> E a
-returnE a = Ok a
+returnE :: a -> P a
+returnE v = \s l -> Ok v
 
-failE :: String -> E a
-failE err = Failed err
+thenE :: P a -> (a -> P b) -> P b
+thenE m k = \s l -> case m s l of
+                        Ok v      -> k v s l
+                        Failed s' -> Failed s'
 
-catchE :: E a -> (String -> E a) -> E a
-catchE m k = 
-   case m of
-      Ok a     -> Ok a
-      Failed e -> k e
+failE :: String -> P a
+failE v = \s l -> Failed v
 
-parseError :: [Token] -> E a
-parseError _ = failE "Parse error"
+catchE :: P a -> (String -> P a) -> P a
+catchE m k = \s l -> case m s l of
+                        Ok v      -> Ok v
+                        Failed s' -> k s' s l
 
-printError :: E a -> IO (Maybe a)
+parseError :: Token -> P a
+parseError _ = \s l -> failE ("Error de parseo en la linea " ++ show l) s l
+
+{-printError :: E a -> IO (Maybe a)
 printError (Ok v)     = return (Just v)
 printError (Failed s) = do putStrLn "Error"
-                           return Nothing
+                           return Nothing-}
 
 data Token  
     = TPlus      
@@ -136,17 +138,23 @@ data Token
     | TTimes     
     | TDiv       
     | TEqual
+    | TCopy
     | TPoint     
     | TColon     
+    | TComma
+    | TPComma
     | TSBracketO 
     | TSBracketC 
     | TParenO    
     | TParenC     
     | TConcat
+    | TKerf
     | TPol
+    | TScale
     | TCon
     | TName String
     | TFloat Float
+    | TNat Int
     | TX
     | TY
     | TPointL    
@@ -156,78 +164,70 @@ data Token
     | TPoint2    
     | TContainer 
     | TEmpty
+    | TEof
     deriving (Eq, Show)
 
 -- ================= --
 -- ===== LEXER ===== --
 -- ================= --
 
-lexer :: String -> [Token]
-lexer []       = []
-lexer (c:cs)
-    | isSpace c = lexer cs
-    | isAlpha c = lexString (c:cs)
-    | isDigit c = lexNum (c:cs) lexer
-lexer ('+':cs) = TPlus : lexer cs
-lexer ('-':cs) = TMinus : lexer cs
-lexer ('*':cs) = TTimes : lexer cs
-lexer ('/':cs) = TDiv : lexer cs
-lexer ('=':cs) = TEqual : lexer cs
-lexer ('(':cs) = TParenO : lexer cs
-lexer (')':cs) = TParenC : lexer cs
-lexer ('[':cs) = lexList cs
-lexer (']':cs) = getRBracket1 cs ++ lexer cs
-lexer (',':cs) = getRBracket2 cs ++ lexer cs
+--lexer :: String -> [Token]
+lexer cont []        = cont TEof []
+lexer cont ('\n':cs) = lexer cont cs
+lexer cont (c:cs)
+    | isSpace c = lexer cont cs
+    | isAlpha c = lexString cont (c:cs)
+    | isDigit c = lexNum cont (c:cs) 
+lexer cont ('+':cs) = cont TPlus cs
+lexer cont ('-':cs) = cont TMinus cs
+lexer cont ('*':cs) = cont TTimes cs
+lexer cont ('/':cs) = cont TDiv cs
+lexer cont ('=':cs) = cont TEqual cs
+lexer cont ('(':cs) = cont TParenO cs
+lexer cont (')':cs) = cont TParenC cs
+lexer cont ('[':cs) = lexer cont cs
+lexer cont (']':cs) = cont TEmpty cs
+lexer cont (',':cs) = cont TComma cs
+lexer cont (';':cs) = cont TPComma cs
 
-getRBracket1 :: String -> [Token]
-getRBracket1 [] = [TColon, TEmpty]
-getRBracket1 (c:cs)
-    | isSpace c = getRBracket1 cs
-    | c == ']'  = [TColon, TEmpty, TConcat, TEmpty]
-    | otherwise = [TColon, TEmpty]
-
-getRBracket2 :: String -> [Token]
-getRBracket2 [] = []
-getRBracket2 (c:cs)
-    | isSpace c = getRBracket2 cs
-    | c == '['  = [TConcat]
-    | otherwise = [TColon]
-
-lexNum :: String -> (String -> [Token]) -> [Token]
-lexNum [] _ = []
-lexNum cs f = if null res 
-              then fromInt 
-              else if fres == '.' 
-                   then let (float, res') = span isDigit (drop 1 res) 
-                   in TFloat ((read int :: Float) + ((read float :: Float) / (fromIntegral (10 ^ length float) :: Float))) : (f res')  
-                   else fromInt 
+--lexNum :: String -> (String -> [Token]) -> [Token]
+lexNum cont [] = cont TEof []
+lexNum cont cs = if null res 
+                 then fromInt 
+                 else if fres == '.' 
+                      then let (float, res') = span isDigit (drop 1 res) 
+                           in cont (TFloat ((read int :: Float) + ((read float :: Float) / (fromIntegral (10 ^ length float) :: Float)))) res'  
+                      else fromInt 
     where (int, res) = span isDigit cs  
           fres       = head res
-          fromInt    = TFloat (read int :: Float) : (f res)
+          fromInt    = cont (TFloat (read int :: Float)) res
 
-lexString :: String -> [Token]
-lexString []     = []
-lexString (c:cs) = case span isAlpha (c:cs) of
-                    ("pdef", res) -> TPol : lexer res
-                    ("cdef", res) -> TCon : lexer res
-                    ("X", res)    -> TX : lexer res
-                    ("Y", res)    -> TY : lexer res   
-                    (po, res)     -> if po == "P"
-                                     then let (num, res') = span isDigit res
-                                          in if num == "1" 
-                                             then TPoint1 : lexer res'
-                                             else if num == "2"
-                                                  then TPoint2 : lexer res'
-                                                  else [] 
-                                     else let (name, res') = span isAlphaNum (po ++ res)
-                                          in TName name : lexer res'  
+--lexString :: String -> [Token]
+lexString cont []     = cont TEof []
+lexString cont (c:cs) = case span isAlpha (c:cs) of
+                         ("pdef", res)  -> cont TPol res
+                         ("cdef", res)  -> cont TCon res
+                         ("X", res)     -> cont TX res
+                         ("Y", res)     -> cont TY res   
+                         ("copy", res)  -> cont TCopy res
+                         ("scale", res) -> cont TScale res
+                         (po, res)      -> if po == "P"
+                                           then let (num, res') = span isDigit res
+                                                in if num == "1" 
+                                                   then cont TPoint1 res'
+                                                   else if num == "2"
+                                                        then cont TPoint2 res'
+                                                        else cont TEof [] 
+                                           else let (name, res') = span isAlphaNum (po ++ res)
+                                                in cont (TName name) res'  
 
-lexList :: String -> [Token]
-lexList []     = []
-lexList (c:cs) = case span (\x -> isAlpha x || isDigit x || isPunctuation x) (c:cs) of
-                    ("X", res)  -> TX : lexer res
-                    ("[", res)  -> TConcat : lexer res 
-                    ("P1", res) -> TPoint1 : lexer res
-                    _           -> lexer (c:cs)
+--lexNat :: String -> [Token]
+lexNat cont [] = cont TEof []
+lexNat cont (c:cs)
+    | isSpace c = lexNat cont cs
+    | isDigit c = let (num, res) = span isDigit (c:cs)
+                  in cont (TNat (read num :: Int)) res 
+
+parseMac s = parseDefs s 1
 
 }
