@@ -7,9 +7,11 @@ import Common
 -- Módulos prestados
 import Data.Char
 import Data.List
+import Control.Monad (liftM, ap)
+import Control.Applicative (Applicative(..))
 }
 
-%name parseSVG SVGExp
+%name parsePath SPath 
 
 %tokentype { Token }
 %error     { parseError }
@@ -17,19 +19,47 @@ import Data.List
 %lexer     { lexer } { TEof }
 
 %token
-    STRING      { TString $$ }
-    PATH        { TPath      }   
+    m      { Tm         }       
+    M      { TM         }
+    l      { Tl         }
+    L      { TL         }
+    Z      { TZ         }
+    '-'    { TMinus     }  
+    FLOAT  { TFloat $$  }
 
 %%
 
-SVGExp : PATH STRING SVGExp { $2 : $3 }
-       |                    { []      }
- 
+FloatExp : '-' FLOAT { -$2 }
+         | FLOAT     { $1  }
+
+SPath :: { SVG }
+SPath : M FloatExp FloatExp Path { M_abs ($2, $3) : $4 }
+      | m FloatExp FloatExp Path { M_abs ($2, $3) : $4 }
+
+Path  :: { SVG }
+Path  : m FloatExp FloatExp Path { M_rel ($2, $3) : $4    }
+      | M FloatExp FloatExp Path { M_abs ($2, $3) : $4    }
+      | l FloatExp FloatExp Path { L_rel ($2, $3) : $4    }
+      | L FloatExp FloatExp Path { L_abs ($2, $3) : $4    }
+      | FloatExp FloatExp Path   { Complete ($1, $2) : $3 }
+      | Z                        { [Z]                    }
 
 {
 
 data PR a = Ok a 
             | Failed String deriving Show
+
+instance Functor PR where
+    fmap = liftM
+
+instance Applicative PR where
+    pure  = return
+    (<*>) = ap
+
+instance Monad PR where
+    return x         = Ok x
+    (Ok x) >>= f     = f x
+    (Failed s) >>= f = Failed s 
 
 type LineNumber = Int
 
@@ -52,11 +82,18 @@ catchE m k = \s l -> case m s l of
                         Failed s' -> k s' s l
 
 parseError :: Token -> P a
-parseError _ = \s l -> failE ("Error de parseo en la línea " ++ show l) s l
+parseError _ = \s l -> failE ("Error de parseo en la linea " ++ show l) s l
 
 data Token   
-    = TPath
-    | TString String 
+    = Tm
+    | TM
+    | Tl
+    | TL
+    | TZ
+    | TMinus
+    | TFloat Float
+    | TPath
+    | TString String
     | TEof
     deriving (Eq, Show)
 
@@ -64,26 +101,43 @@ data Token
 -- ===== LEXER ===== --
 -- ================= --
 
-lexer cont []           = cont TEof []
-lexer cont (c:('d':cs)) = if isSpace c || c == '\n' then lexerD cont cs else lexer cont cs
-lexer cont ('\n':cs)    = \l -> lexer cont cs (l + 1)
-lexer cont (c:cs)
-    | isSpace c = lexer cont cs
-    | c == '<'  = lexPath cont cs
+get_paths :: String -> [String]
+get_paths [] = []
+get_paths (c:cs)
+    | isPrefixOf " d=" (c:cs)  = takeWhile (/= '"') (drop 3 cs) : get_paths (dropWhile (/= '"') (drop 3 cs))
+    | isPrefixOf "\nd=" (c:cs) = takeWhile (/= '"') (drop 3 cs) : get_paths (dropWhile (/= '"') (drop 3 cs))
+    | otherwise                = get_paths cs
+
+lexer cont []       = cont TEof []
+lexer cont ('m':cs) = cont Tm cs
+lexer cont ('M':cs) = cont TM cs
+lexer cont ('l':cs) = cont Tl cs
+lexer cont ('L':cs) = cont TL cs
+lexer cont ('z':cs) = cont TZ cs
+lexer cont ('Z':cs) = cont TZ cs
+lexer cont ('-':cs) = cont TMinus cs
+lexer cont (c:cs)   
+    | isDigit c = lexNum cont (c:cs)     
     | otherwise = lexer cont cs
 
-lexerD cont [] = cont TEof []
-lexerD cont (c:cs)      
-    | isSpace c = lexerD cont cs
-    | c == '='  = let (x, res) = (takeWhile (/= '\"') (drop 1 cs), dropWhile (/= '\"') (drop 1 cs))
-                  in cont (TString x) res
-    | otherwise = lexer cont cs
+lexNum cont [] = cont TEof []
+lexNum cont cs = if null res 
+                 then cont TEof [] 
+                 else if fres == '.' 
+                      then let (float, res') = span isDigit (drop 1 res) 
+                           in cont (TFloat ((read int :: Float) 
+                                    + ((read float :: Float) / (fromIntegral (10 ^ length float) :: Float)))) res'  
+                      else cont TEof [] 
+    where (int, res) = span isDigit cs  
+          fres       = head res
 
-lexPath cont []     = cont TEof []
-lexPath cont (c:cs) = case span isAlpha (c:cs) of
-                        ("path", res) -> cont TPath res
-                        (_, res)      -> lexer cont res
+parseSVG s = myConcat (map (\x -> parsePath x 1) (get_paths s))  
 
-parsesvg s = parseSVG s 1
+myConcat :: [PR SVG] -> PR [SVG]
+myConcat []     = Ok []
+myConcat (x:xs) = case x of 
+                    Ok v     -> do res <- myConcat xs
+                                   return (v : res)
+                    Failed s -> Failed s
 
 }
