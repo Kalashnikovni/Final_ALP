@@ -23,7 +23,17 @@ newtype Containers = Cs [Container] deriving Show
 data Def           = Dp String Polygon Float -- ID, def. del polígono y escalamiento 
                      | Dc String Container Float deriving Show
 
+data Machine       = Kerf Float [Def] deriving Show
+
 -- Tipos para archivos SVG --
 -----------------------------
 
-type SVGExp  = [String]
+data SVGCommand = M_abs MyPoint
+                | M_rel MyPoint
+                | L_abs MyPoint
+                | L_rel MyPoint
+                | Complete MyPoint -- Usado para los espacios sin comando
+                | Z 
+             deriving Show 
+
+type SVG = [SVGCommand]
