@@ -14,6 +14,7 @@ import Control.Monad (liftM, ap)
 
 %name parseDef DefExp
 %name parseDefs Defs
+%name parseM Machine
 
 %tokentype { Token }
 %error     { parseError }
@@ -26,12 +27,9 @@ import Control.Monad (liftM, ap)
     '*'         { TTimes     }
     '/'         { TDiv       }
     '='         { TEqual     }
-    ':'         { TColon     }
     '('         { TParenO    }
     ')'         { TParenC    } 
     'x'         { TCopy      }
-    ','         { TComma     }
-    ';'         { TPComma    }
     KERF        { TKerf      }
     NAME        { TName $$   }
     POL         { TPol       }           
@@ -49,7 +47,7 @@ import Control.Monad (liftM, ap)
 
 %%
 
-Machine    : KERF FloatExp Defs { $2 }
+Machine    : KERF FloatExp Defs { Kerf $2 $3 }
 
 DefExp     : POL NAME '=' Polygon   { Dp $2 $4 1 }
            | CON NAME '=' Container { Dc $2 $4 1 }  
@@ -84,14 +82,10 @@ Polygon    : Point Point Point PointList { P ($1 : ($2 : ($3 : $4))) }
 Container  :: { Container }
 Container  : P1 Point P2 Point   { C { p1x = fst $2, p1y = snd $2, p2x = fst $4, p2y = snd $4, rid = 0 } }
 
-Defs       : DefExp ',' Defs { $1 : $3 }
+Defs       : DefExp Defs { $1 : $2 }
            |                 { []      }
-           | POL NAME '=' Polygon 'x' FLOAT SCALE FLOAT ';' Defs   { %if $8 < 0 
-                                                                    then failE "El escalamiento debe ser positivo"
-                                                                    else returnE ([Dp $2 $4 $8]) }
-           | CON NAME '=' Container 'x' FLOAT SCALE FLOAT ';' Defs { %if $8 < 0
-                                                                    then failE "El escalamiento debe ser positivo"
-                                                                    else returnE (copytimes (Dc $2 $4 $8) (floor $6) ++ $10) } 
+           | POL NAME '=' Polygon 'x' INT SCALE FLOAT Defs   { copytimes (Dp $2 $4 $8) $6 ++ $9 }
+           | CON NAME '=' Container 'x' INT SCALE FLOAT Defs { copytimes (Dc $2 $4 $8) $6 ++ $9 } 
 
 
 {
@@ -140,14 +134,8 @@ data Token
     | TEqual
     | TCopy
     | TPoint     
-    | TColon     
-    | TComma
-    | TPComma
-    | TSBracketO 
-    | TSBracketC 
     | TParenO    
     | TParenC     
-    | TConcat
     | TKerf
     | TPol
     | TScale
@@ -172,23 +160,22 @@ data Token
 -- ================= --
 
 --lexer :: String -> [Token]
-lexer cont []        = cont TEof []
-lexer cont ('\n':cs) = lexer cont cs
+lexer cont []             = cont TEof []
+lexer cont ('\n':cs)      = \l -> lexer cont cs (l + 1)
 lexer cont (c:cs)
     | isSpace c = lexer cont cs
     | isAlpha c = lexString cont (c:cs)
     | isDigit c = lexNum cont (c:cs) 
-lexer cont ('+':cs) = cont TPlus cs
-lexer cont ('-':cs) = cont TMinus cs
-lexer cont ('*':cs) = cont TTimes cs
-lexer cont ('/':cs) = cont TDiv cs
-lexer cont ('=':cs) = cont TEqual cs
-lexer cont ('(':cs) = cont TParenO cs
-lexer cont (')':cs) = cont TParenC cs
-lexer cont ('[':cs) = lexer cont cs
-lexer cont (']':cs) = cont TEmpty cs
-lexer cont (',':cs) = cont TComma cs
-lexer cont (';':cs) = cont TPComma cs
+lexer cont ('-':('-':cs)) = lexer cont (dropWhile (/= '\n') cs)
+lexer cont ('+':cs)       = cont TPlus cs
+lexer cont ('-':cs)       = cont TMinus cs
+lexer cont ('*':cs)       = cont TTimes cs
+lexer cont ('/':cs)       = cont TDiv cs
+lexer cont ('=':cs)       = cont TEqual cs
+lexer cont ('(':cs)       = cont TParenO cs
+lexer cont (')':cs)       = cont TParenC cs
+lexer cont ('[':cs)       = lexer cont cs 
+lexer cont (']':cs)       = cont TEmpty cs
 
 --lexNum :: String -> (String -> [Token]) -> [Token]
 lexNum cont [] = cont TEof []
@@ -200,11 +187,12 @@ lexNum cont cs = if null res
                       else fromInt 
     where (int, res) = span isDigit cs  
           fres       = head res
-          fromInt    = cont (TFloat (read int :: Float)) res
+          fromInt    = cont (TNat (read int :: Int)) res
 
 --lexString :: String -> [Token]
 lexString cont []     = cont TEof []
 lexString cont (c:cs) = case span isAlpha (c:cs) of
+                         ("kerf", res)  -> cont TKerf res
                          ("pdef", res)  -> cont TPol res
                          ("cdef", res)  -> cont TCon res
                          ("X", res)     -> cont TX res
@@ -228,6 +216,6 @@ lexNat cont (c:cs)
     | isDigit c = let (num, res) = span isDigit (c:cs)
                   in cont (TNat (read num :: Int)) res 
 
-parseMac s = parseDefs s 1
+parseMac s = parseM s 1
 
 }
