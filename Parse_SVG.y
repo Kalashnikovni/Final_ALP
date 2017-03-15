@@ -12,6 +12,7 @@ import Control.Applicative (Applicative(..))
 }
 
 %name parsePath SPath 
+%name parseRect Rect
 
 %tokentype { Token }
 %error     { parseError }
@@ -21,13 +22,21 @@ import Control.Applicative (Applicative(..))
 %token
     m      { Tm         }       
     M      { TM         }
+    h      { Th         }
+    H      { TH         }            
+    v      { Tv         }
+    V      { TV         }
     l      { Tl         }
     L      { TL         }
     Z      { TZ         }
     '-'    { TMinus     }  
     FLOAT  { TFloat $$  }
+    WIDTH  { TWidth     }
+    HEIGHT { THeight    }
 
 %%
+
+Rect : WIDTH FloatExp HEIGHT FloatExp  { C { p1x = 0, p1y = 0, p2x = $2, p2y = $4, rid = 0 } }
 
 FloatExp : '-' FLOAT { -$2 }
          | FLOAT     { $1  }
@@ -39,6 +48,10 @@ SPath : M FloatExp FloatExp Path { M_abs ($2, $3) : $4 }
 Path  :: { SVG }
 Path  : m FloatExp FloatExp Path { M_rel ($2, $3) : $4    }
       | M FloatExp FloatExp Path { M_abs ($2, $3) : $4    }
+      | h FloatExp Path          { H_abs $2 : $3          }
+      | H FloatExp Path          { H_rel $2 : $3          }
+      | v FloatExp Path          { V_abs $2 : $3          }
+      | V FloatExp Path          { V_rel $2 : $3          }
       | l FloatExp FloatExp Path { L_rel ($2, $3) : $4    }
       | L FloatExp FloatExp Path { L_abs ($2, $3) : $4    }
       | FloatExp FloatExp Path   { Complete ($1, $2) : $3 }
@@ -87,13 +100,17 @@ parseError _ = \s l -> failE ("Error de parseo en la linea " ++ show l) s l
 data Token   
     = Tm
     | TM
+    | Th
+    | TH
+    | Tv
+    | TV
     | Tl
     | TL
     | TZ
     | TMinus
     | TFloat Float
-    | TPath
-    | TString String
+    | TWidth
+    | THeight
     | TEof
     deriving (Eq, Show)
 
@@ -104,21 +121,34 @@ data Token
 get_paths :: String -> [String]
 get_paths [] = []
 get_paths (c:cs)
-    | isPrefixOf " d=" (c:cs)  = takeWhile (/= '"') (drop 3 cs) : get_paths (dropWhile (/= '"') (drop 3 cs))
-    | isPrefixOf "\nd=" (c:cs) = takeWhile (/= '"') (drop 3 cs) : get_paths (dropWhile (/= '"') (drop 3 cs))
+    | isPrefixOf " d=" (c:cs)  = takeWhile (/= '"') cs' : get_paths (dropWhile (/= '"') cs')
+    | isPrefixOf "\nd=" (c:cs) = takeWhile (/= '"') cs' : get_paths (dropWhile (/= '"') cs')
     | otherwise                = get_paths cs
+    where cs' = drop 3 cs
+
+get_rects :: String -> [String]
+get_rects [] = []
+get_rects (c:cs)
+    | isPrefixOf "<rect" (c:cs)  = takeWhile (/= '>') cs' : get_rects (dropWhile (/= '/') cs')
+    | otherwise                  = get_rects cs
+    where cs' = drop 5 cs
 
 lexer cont []       = cont TEof []
+lexer cont (c:cs)   
+    | isDigit c = lexNum cont (c:cs)     
+    | isAlpha c = lexString cont (c:cs)
+    | isSpace c = lexer cont cs
 lexer cont ('m':cs) = cont Tm cs
 lexer cont ('M':cs) = cont TM cs
+lexer cont ('h':cs) = cont Th cs
+lexer cont ('H':cs) = cont TH cs
+lexer cont ('v':cs) = cont Tv cs
+lexer cont ('V':cs) = cont TV cs
 lexer cont ('l':cs) = cont Tl cs
 lexer cont ('L':cs) = cont TL cs
 lexer cont ('z':cs) = cont TZ cs
 lexer cont ('Z':cs) = cont TZ cs
-lexer cont ('-':cs) = cont TMinus cs
-lexer cont (c:cs)   
-    | isDigit c = lexNum cont (c:cs)     
-    | otherwise = lexer cont cs
+lexer cont (c:cs)   = lexer cont cs
 
 lexNum cont [] = cont TEof []
 lexNum cont cs = if null res 
@@ -131,7 +161,15 @@ lexNum cont cs = if null res
     where (int, res) = span isDigit cs  
           fres       = head res
 
-parseSVG s = myConcat (map (\x -> parsePath x 1) (get_paths s))  
+lexString cont [] = cont TEof []
+lexString cont cs = case span isAlpha cs of
+                        ("width=", res) -> cont TWidth res
+                        ("height=",res) -> cont THeight res
+                        (s, res)        -> lexer cont res 
+
+parseSVGP s = myConcat (map (\x -> parsePath x 1) (get_paths s))  
+
+parseSVGR s = map (\x -> parseRect x 1) (get_rects s)
 
 myConcat :: [PR SVG] -> PR [SVG]
 myConcat []     = Ok []

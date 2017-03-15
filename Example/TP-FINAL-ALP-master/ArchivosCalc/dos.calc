@@ -1,0 +1,4 @@
+D1: =hoy();
+A10: 30/01/1993;
+C1: =diasEntre(A10,D1);
+C2: =aniosEntre(A10,D1);

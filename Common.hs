@@ -30,10 +30,18 @@ data Machine       = Kerf Float [Def] deriving Show
 
 data SVGCommand = M_abs MyPoint
                 | M_rel MyPoint
+                | H_abs Float
+                | H_rel Float
+                | V_abs Float
+                | V_rel Float
                 | L_abs MyPoint
                 | L_rel MyPoint
                 | Complete MyPoint -- Usado para los espacios sin comando
                 | Z 
              deriving Show 
 
-type SVG = [SVGCommand]
+-- De los elementos SVG me quedo con lo que me interesa
+data SVG = SVGRectangle Attributes Float Float 
+           | SVGPolygon Attributes [MyPoint]
+           | SVGPath Attributes [MyPoint]
+        deriving Show
