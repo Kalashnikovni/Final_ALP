@@ -174,8 +174,6 @@ lexer cont ('/':cs)       = cont TDiv cs
 lexer cont ('=':cs)       = cont TEqual cs
 lexer cont ('(':cs)       = cont TParenO cs
 lexer cont (')':cs)       = cont TParenC cs
-lexer cont ('[':cs)       = lexer cont cs 
-lexer cont (']':cs)       = cont TEmpty cs
 
 --lexNum :: String -> (String -> [Token]) -> [Token]
 lexNum cont [] = cont TEof []
