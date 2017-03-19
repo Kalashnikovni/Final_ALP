@@ -82,8 +82,8 @@ Polygon    : Point Point Point PointList { P ($1 : ($2 : ($3 : $4))) }
 Container  :: { Container }
 Container  : P1 Point P2 Point   { C { p1x = fst $2, p1y = snd $2, p2x = fst $4, p2y = snd $4, rid = 0 } }
 
-Defs       : DefExp Defs { $1 : $2 }
-           |                 { []      }
+Defs       : DefExp Defs                                     { $1 : $2                          }
+           |                                                 { []                               }
            | POL NAME '=' Polygon 'x' INT SCALE FLOAT Defs   { copytimes (Dp $2 $4 $8) $6 ++ $9 }
            | CON NAME '=' Container 'x' INT SCALE FLOAT Defs { copytimes (Dc $2 $4 $8) $6 ++ $9 } 
 
@@ -159,7 +159,6 @@ data Token
 -- ===== LEXER ===== --
 -- ================= --
 
---lexer :: String -> [Token]
 lexer cont []             = cont TEof []
 lexer cont ('\n':cs)      = \l -> lexer cont cs (l + 1)
 lexer cont (c:cs)
@@ -174,8 +173,9 @@ lexer cont ('/':cs)       = cont TDiv cs
 lexer cont ('=':cs)       = cont TEqual cs
 lexer cont ('(':cs)       = cont TParenO cs
 lexer cont (')':cs)       = cont TParenC cs
+lexer cont ('[':cs)       = lexer cont cs
+lexer cont (']':cs)       = cont TEmpty cs
 
---lexNum :: String -> (String -> [Token]) -> [Token]
 lexNum cont [] = cont TEof []
 lexNum cont cs = if null res 
                  then fromInt 
@@ -187,7 +187,6 @@ lexNum cont cs = if null res
           fres       = head res
           fromInt    = cont (TNat (read int :: Int)) res
 
---lexString :: String -> [Token]
 lexString cont []     = cont TEof []
 lexString cont (c:cs) = case span isAlpha (c:cs) of
                          ("kerf", res)  -> cont TKerf res
@@ -207,7 +206,6 @@ lexString cont (c:cs) = case span isAlpha (c:cs) of
                                            else let (name, res') = span isAlphaNum (po ++ res)
                                                 in cont (TName name) res'  
 
---lexNat :: String -> [Token]
 lexNat cont [] = cont TEof []
 lexNat cont (c:cs)
     | isSpace c = lexNat cont cs

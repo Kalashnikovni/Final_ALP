@@ -624,7 +624,6 @@ data Token
 -- ===== LEXER ===== --
 -- ================= --
 
---lexer :: String -> [Token]
 lexer cont []             = cont TEof []
 lexer cont ('\n':cs)      = \l -> lexer cont cs (l + 1)
 lexer cont (c:cs)
@@ -639,10 +638,9 @@ lexer cont ('/':cs)       = cont TDiv cs
 lexer cont ('=':cs)       = cont TEqual cs
 lexer cont ('(':cs)       = cont TParenO cs
 lexer cont (')':cs)       = cont TParenC cs
-lexer cont ('[':cs)       = lexer cont cs 
+lexer cont ('[':cs)       = lexer cont cs
 lexer cont (']':cs)       = cont TEmpty cs
 
---lexNum :: String -> (String -> [Token]) -> [Token]
 lexNum cont [] = cont TEof []
 lexNum cont cs = if null res 
                  then fromInt 
@@ -654,7 +652,6 @@ lexNum cont cs = if null res
           fres       = head res
           fromInt    = cont (TNat (read int :: Int)) res
 
---lexString :: String -> [Token]
 lexString cont []     = cont TEof []
 lexString cont (c:cs) = case span isAlpha (c:cs) of
                          ("kerf", res)  -> cont TKerf res
@@ -674,7 +671,6 @@ lexString cont (c:cs) = case span isAlpha (c:cs) of
                                            else let (name, res') = span isAlphaNum (po ++ res)
                                                 in cont (TName name) res'  
 
---lexNat :: String -> [Token]
 lexNat cont [] = cont TEof []
 lexNat cont (c:cs)
     | isSpace c = lexNat cont cs

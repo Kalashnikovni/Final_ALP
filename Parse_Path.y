@@ -1,5 +1,5 @@
 {
-module Parse_SVG where
+module Parse_Path where
     
 -- Módulos propios
 import Common
@@ -11,8 +11,8 @@ import Control.Monad (liftM, ap)
 import Control.Applicative (Applicative(..))
 }
 
-%name parseFloat FloatExp
-%name parsePath SPath 
+%name parseF FloatExp
+%name parseP SPath 
 
 %tokentype { Token }
 %error     { parseError }
@@ -22,10 +22,15 @@ import Control.Applicative (Applicative(..))
 %token
     m      { Tm         }       
     M      { TM         }
+    h      { Th         }       
+    H      { TH         }       
+    v      { Tv         }
+    V      { TV         }
     l      { Tl         }
     L      { TL         }
     Z      { TZ         }
     '-'    { TMinus     }  
+    ','    { TComma     }  
     FLOAT  { TFloat $$  }
 
 %%
@@ -33,17 +38,30 @@ import Control.Applicative (Applicative(..))
 FloatExp : '-' FLOAT { -$2 }
          | FLOAT     { $1  }
 
-SPath :: { SVG }
+SPath :: { [PathCommand] }
 SPath : M FloatExp FloatExp Path { M_abs ($2, $3) : $4 }
       | m FloatExp FloatExp Path { M_abs ($2, $3) : $4 }
 
-Path  :: { SVG }
-Path  : m FloatExp FloatExp Path { M_rel ($2, $3) : $4    }
-      | M FloatExp FloatExp Path { M_abs ($2, $3) : $4    }
-      | l FloatExp FloatExp Path { L_rel ($2, $3) : $4    }
-      | L FloatExp FloatExp Path { L_abs ($2, $3) : $4    }
-      | FloatExp FloatExp Path   { Complete ($1, $2) : $3 }
-      | Z                        { [Z]                    }
+Path  :: { [PathCommand] }
+Path  : m FloatExp FloatExp Path     { M_rel ($2, $3) : $4    }
+      | M FloatExp FloatExp Path     { M_abs ($2, $3) : $4    }
+      | h FloatExp FloatExp Path     { H_rel ($2, $3) : $4    }
+      | H FloatExp FloatExp Path     { H_rel ($2, $3) : $4    }
+      | v FloatExp FloatExp Path     { V_abs ($2, $3) : $4    }
+      | V FloatExp FloatExp Path     { V_abs ($2, $3) : $4    }
+      | l FloatExp FloatExp Path     { L_rel ($2, $3) : $4    }
+      | L FloatExp FloatExp Path     { L_abs ($2, $3) : $4    }
+      | m FloatExp ',' FloatExp Path { M_rel ($2, $4) : $5    }
+      | M FloatExp ',' FloatExp Path { M_abs ($2, $4) : $5    }
+      | h FloatExp ',' FloatExp Path { H_rel ($2, $4) : $5    }
+      | H FloatExp ',' FloatExp Path { H_rel ($2, $4) : $5    }
+      | v FloatExp ',' FloatExp Path { V_abs ($2, $4) : $5    }
+      | V FloatExp ',' FloatExp Path { V_abs ($2, $4) : $5    }
+      | l FloatExp ',' FloatExp Path { L_rel ($2, $4) : $5    }
+      | L FloatExp ',' FloatExp Path { L_abs ($2, $4) : $5    }
+      | FloatExp FloatExp Path       { Complete ($1, $2) : $3 }
+      | FloatExp ',' FloatExp Path   { Complete ($1, $3) : $4 }
+      | Z                            { [Z]                    }
 
 {
 
@@ -88,12 +106,16 @@ parseError _ = \s l -> failE ("Error de parseo en la linea " ++ show l) s l
 data Token   
     = Tm
     | TM
+    | Th
+    | TH
+    | Tv
+    | TV
     | Tl
     | TL
     | TZ
     | TMinus
+    | TComma
     | TFloat Float
-    | TPath
     | TString String
     | TEof
     deriving (Eq, Show)
@@ -102,24 +124,23 @@ data Token
 -- ===== LEXER ===== --
 -- ================= --
 
-get_paths :: String -> [String]
-get_paths [] = []
-get_paths (c:cs)
-    | isPrefixOf " d=" (c:cs)  = takeWhile (/= '"') (drop 3 cs) : get_paths (dropWhile (/= '"') (drop 3 cs))
-    | isPrefixOf "\nd=" (c:cs) = takeWhile (/= '"') (drop 3 cs) : get_paths (dropWhile (/= '"') (drop 3 cs))
-    | otherwise                = get_paths cs
-
 lexer cont []       = cont TEof []
 lexer cont ('m':cs) = cont Tm cs
 lexer cont ('M':cs) = cont TM cs
+lexer cont ('h':cs) = cont Th cs
+lexer cont ('H':cs) = cont TH cs
+lexer cont ('v':cs) = cont Tv cs
+lexer cont ('V':cs) = cont TV cs
 lexer cont ('l':cs) = cont Tl cs
 lexer cont ('L':cs) = cont TL cs
 lexer cont ('z':cs) = cont TZ cs
 lexer cont ('Z':cs) = cont TZ cs
 lexer cont ('-':cs) = cont TMinus cs
+lexer cont (',':cs) = cont TComma cs
 lexer cont (c:cs)   
     | isDigit c = lexNum cont (c:cs)     
-    | otherwise = lexer cont cs
+    | isSpace c = lexer cont cs
+    | otherwise = cont TEof []
 
 lexNum cont [] = cont TEof []
 lexNum cont cs = if null res 
@@ -132,13 +153,8 @@ lexNum cont cs = if null res
     where (int, res) = span isDigit cs  
           fres       = head res
 
-parseSVG s = myConcat (map (\x -> parsePath x 1) (get_paths s))  
+parsePath s = parseP s 1  
 
-myConcat :: [PR SVG] -> PR [SVG]
-myConcat []     = Ok []
-myConcat (x:xs) = case x of 
-                    Ok v     -> do res <- myConcat xs
-                                   return (v : res)
-                    Failed s -> Failed s
+parseFloat s = parseF s 1
 
 }

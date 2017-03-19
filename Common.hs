@@ -28,12 +28,14 @@ data Machine       = Kerf Float [Def] deriving Show
 -- Tipos para archivos SVG --
 -----------------------------
 
-data SVGCommand = M_abs MyPoint
-                | M_rel MyPoint
-                | L_abs MyPoint
-                | L_rel MyPoint
-                | Complete MyPoint -- Usado para los espacios sin comando
-                | Z 
-             deriving Show 
-
-type SVG = [SVGCommand]
+data PathCommand = M_rel MyPoint
+                 | M_abs MyPoint
+                 | H_rel MyPoint
+                 | H_abs MyPoint
+                 | V_rel MyPoint
+                 | V_abs MyPoint
+                 | L_rel MyPoint
+                 | L_abs MyPoint
+                 | Complete MyPoint -- Usado para los espacios sin comando
+                 | Z 
+              deriving Show 
