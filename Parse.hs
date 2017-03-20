@@ -586,11 +586,6 @@ catchE m k = \s l -> case m s l of
 parseError :: Token -> P a
 parseError _ = \s l -> failE ("Error de parseo en la linea " ++ show l) s l
 
-{-printError :: E a -> IO (Maybe a)
-printError (Ok v)     = return (Just v)
-printError (Failed s) = do putStrLn "Error"
-                           return Nothing-}
-
 data Token  
     = TPlus      
     | TMinus     

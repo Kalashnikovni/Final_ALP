@@ -5,7 +5,7 @@ module Common where
 
 type MyPoint       = (Float, Float)
 
-newtype Polygon    = P [MyPoint] deriving Show
+newtype Polygon    = P [MyPoint] deriving Show 
 
 newtype Polygons   = Ps [Polygon] deriving Show
 
@@ -20,8 +20,9 @@ data Container     = C {p1x :: Float,
                  
 newtype Containers = Cs [Container] deriving Show
 
-data Def           = Dp String Polygon Float -- ID, def. del polígono y escalamiento 
-                     | Dc String Container Float deriving Show
+data Def           = Dc String Container Float
+                     | Dp String Polygon Float -- ID (solo para el usuario), def. del polígono y escalamiento 
+                  deriving Show
 
 data Machine       = Kerf Float [Def] deriving Show
 

@@ -71,7 +71,7 @@ compileFile f s = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
                      if List.isSuffixOf ".svg" f
                      then do str <- catch (BS.readFile f)
                                     (\e -> do let err = show (e :: IOException)
-                                              SIO.hPutStr stderr ("*** Error: no se pudo abrir" ++ err)
+                                              SIO.hPutStr stderr ("*** Error: no se pudo abrir" ++ err ++ "\n")
                                               return "")
                              case parseXML "" str of
                                 Left st -> return s
@@ -82,10 +82,10 @@ compileFile f s = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
                                            in return s
                      else do str <- catch (SIO.readFile f)
                                           (\e -> do let err = show (e :: IOException)
-                                                    SIO.hPutStr stderr ("*** Error: no se pudo abrir " ++ err)
+                                                    SIO.hPutStr stderr ("*** Error: no se pudo abrir " ++ err ++ "\n")
                                                     return "")  
                              case parseMac str of
-                                Parse.Failed st -> do SIO.putStrLn $ "\n" ++ st
+                                Parse.Failed st -> do SIO.putStrLn st
                                                       return s 
                                 Parse.Ok v      -> return s
 
