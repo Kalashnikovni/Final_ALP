@@ -34,7 +34,29 @@ isPolygon (Dp _ _ _) = True
 isPolygon _          = False
 
 -- SVGFiles --
--------------i-
+--------------
+
+evalPath :: [PathCommand] -> Polygon
+evalPath ps = P (eP ps (0,0) True)
+
+-- El bool es True si el comando es absoluto, y False en caso contrario
+eP :: [PathCommand] -> MyPoint -> Bool -> [MyPoint]
+eP []             _ b     = []
+eP (M_rel p : ps) _ b     = p : (eP ps p False)
+eP (M_abs p : ps) _ b     = p : (eP ps p True)
+eP (H_rel f : ps) p' b    = let np = (fst p' + f, snd p')
+                                  in np : (eP ps np b) 
+eP (H_abs f : ps) p' b    = let np = (f, snd p')
+                                  in np : (eP ps np b) 
+eP (V_rel f : ps) p' b    = let np = (fst p', snd p' + f)
+                                  in np : (eP ps np b) 
+eP (V_abs f : ps) p' b    = let np = (fst p', f)
+                                  in np : (eP ps np b) 
+eP (L_rel p : ps) p' b    = let np = (fst p' + fst p, snd p' + snd p)
+                                  in np : (eP ps np b)
+eP (L_abs p : ps) _ b     = p : (eP ps p b)
+eP (Complete p : ps) p' b = if b then eP (L_abs p : ps) p' b else eP (L_rel p : ps) p' b
+eP (Z : _) _ _            = []
 
 --evalSVG ::  
 --evalSVG = 

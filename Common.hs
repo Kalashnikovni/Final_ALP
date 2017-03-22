@@ -31,10 +31,10 @@ data Machine       = Kerf Float [Def] deriving Show
 
 data PathCommand = M_rel MyPoint
                  | M_abs MyPoint
-                 | H_rel MyPoint
-                 | H_abs MyPoint
-                 | V_rel MyPoint
-                 | V_abs MyPoint
+                 | H_rel Float
+                 | H_abs Float
+                 | V_rel Float
+                 | V_abs Float
                  | L_rel MyPoint
                  | L_abs MyPoint
                  | Complete MyPoint -- Usado para los espacios sin comando

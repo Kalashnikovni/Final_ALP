@@ -39,24 +39,18 @@ FloatExp : '-' FLOAT { -$2 }
          | FLOAT     { $1  }
 
 SPath :: { [PathCommand] }
-SPath : M FloatExp FloatExp Path { M_abs ($2, $3) : $4 }
-      | m FloatExp FloatExp Path { M_abs ($2, $3) : $4 }
+SPath : M FloatExp FloatExp Path     { M_abs ($2, $3) : $4 }
+      | m FloatExp FloatExp Path     { M_rel ($2, $3) : $4 }
+      | M FloatExp ',' FloatExp Path { M_abs ($2, $4) : $5 }
+      | m FloatExp ',' FloatExp Path { M_rel ($2, $4) : $5 }
 
 Path  :: { [PathCommand] }
-Path  : m FloatExp FloatExp Path     { M_rel ($2, $3) : $4    }
-      | M FloatExp FloatExp Path     { M_abs ($2, $3) : $4    }
-      | h FloatExp FloatExp Path     { H_rel ($2, $3) : $4    }
-      | H FloatExp FloatExp Path     { H_rel ($2, $3) : $4    }
-      | v FloatExp FloatExp Path     { V_abs ($2, $3) : $4    }
-      | V FloatExp FloatExp Path     { V_abs ($2, $3) : $4    }
+Path  : h FloatExp Path              { H_rel $2 : $3    }
+      | H FloatExp Path              { H_rel $2 : $3    }
+      | v FloatExp Path              { V_abs $2 : $3    }
+      | V FloatExp Path              { V_abs $2 : $3    }
       | l FloatExp FloatExp Path     { L_rel ($2, $3) : $4    }
       | L FloatExp FloatExp Path     { L_abs ($2, $3) : $4    }
-      | m FloatExp ',' FloatExp Path { M_rel ($2, $4) : $5    }
-      | M FloatExp ',' FloatExp Path { M_abs ($2, $4) : $5    }
-      | h FloatExp ',' FloatExp Path { H_rel ($2, $4) : $5    }
-      | H FloatExp ',' FloatExp Path { H_rel ($2, $4) : $5    }
-      | v FloatExp ',' FloatExp Path { V_abs ($2, $4) : $5    }
-      | V FloatExp ',' FloatExp Path { V_abs ($2, $4) : $5    }
       | l FloatExp ',' FloatExp Path { L_rel ($2, $4) : $5    }
       | L FloatExp ',' FloatExp Path { L_abs ($2, $4) : $5    }
       | FloatExp FloatExp Path       { Complete ($1, $2) : $3 }

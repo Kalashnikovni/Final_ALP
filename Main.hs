@@ -5,6 +5,7 @@ import Common
 import Parse
 import Parse_SVG
 import Parse_Path
+import Eval
 import Rectangles
 
 -- Módulos prestados 
@@ -79,7 +80,8 @@ compileFile f s = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
                                                c    = get_elements dcon lookc "rect"
                                                po   = get_elements dcon lookp "polygon"
                                                pa   = get_elements dcon lookd "path"
-                                           in return s
+                                           in do print pa
+                                                 return s
                      else do str <- catch (SIO.readFile f)
                                           (\e -> do let err = show (e :: IOException)
                                                     SIO.hPutStr stderr ("*** Error: no se pudo abrir " ++ err ++ "\n")
