@@ -3,28 +3,28 @@ module Common where
 -- Tipos para polígonos desde línea de comando --
 -------------------------------------------------
 
-type MyPoint       = (Float, Float)
+type MyPoint    = (Float, Float)
 
-newtype Polygon    = P [MyPoint] deriving Show 
+type Polygon    = [MyPoint]  
 
-newtype Polygons   = Ps [Polygon] deriving Show
+type Polygons   = [Polygon] 
 
 -- Representamos un rectángulo de acuerdo a su diagonal "de izquierda a derecha, de abajo hacia arriba". 
 -- Es decir, con un vector del cuadrante I.
 -- El int representa el id del rectángulo.
-data Container     = C {p1x :: Float,
-                        p1y :: Float,
-                        p2x :: Float,
-                        p2y :: Float,
-                        rid :: Int} deriving (Show, Eq) 
+data Container  = C {p1x :: Float,
+                     p1y :: Float,
+                     p2x :: Float,
+                     p2y :: Float,
+                     rid :: Int} deriving (Show, Eq) 
                  
-newtype Containers = Cs [Container] deriving Show
+type Containers = [Container] 
 
-data Def           = Dc String Container Float
-                     | Dp String Polygon Float -- ID (solo para el usuario), def. del polígono y escalamiento 
-                  deriving Show
+data Def        = Dc String Container Float
+                  | Dp String Polygon Float -- ID (solo para el usuario), def. del polígono y escalamiento 
+               deriving Show
 
-data Machine       = Kerf Float [Def] deriving Show
+data Machine    = Kerf Float [Def] deriving Show
 
 -- Tipos para archivos SVG --
 -----------------------------
