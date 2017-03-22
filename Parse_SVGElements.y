@@ -1,5 +1,5 @@
 {
-module Parse_Path where
+module Parse_SVGElements where
     
 -- Módulos propios
 import Common
@@ -10,7 +10,8 @@ import Data.List
 }
 
 %name parseR Rect
-%name parseP SPath 
+%name parsePo Polygon
+%name parsePa SPath 
 
 %tokentype { Token }
 %error     { parseError }
@@ -30,7 +31,6 @@ import Data.List
     '-'    { TMinus     }  
     ','    { TComma     }  
     FLOAT  { TFloat $$  }
-    EMPTYL { TEmpty     }
 
 %%
 
@@ -45,7 +45,7 @@ Rect  :: { Container }
 Rect  : FloatExp FloatExp { C {p1x = 0, p1y = 0, p2x = $1, p2y = $2, rid = 0} }
 
 Polygon :: { Polygon }
-Polygon : EMPTYL        { []      }
+Polygon :               { []      }
         | Point Polygon { $1 : $2 } 
 
 SPath :: { [PathCommand] }
@@ -103,7 +103,6 @@ data Token
     | TMinus
     | TComma
     | TFloat Float
-    | TEmpty
     | TEof
     deriving (Eq, Show)
 
@@ -132,17 +131,20 @@ lexer cont (c:cs)
 
 lexNum cont [] = cont TEof []
 lexNum cont cs = if null res 
-                 then cont TEof [] 
+                 then fromInt 
                  else if fres == '.' 
                       then let (float, res') = span isDigit (drop 1 res) 
                            in cont (TFloat ((read int :: Float) 
                                     + ((read float :: Float) / (fromIntegral (10 ^ length float) :: Float)))) res'  
-                      else cont TEof [] 
+                      else fromInt
     where (int, res) = span isDigit cs  
           fres       = head res
+          fromInt    = cont (TFloat (read int :: Float)) res
 
-parsePath s = parseP s 1  
+parseRect s    = parseR s 1
 
-parseRect s = parseR s 1
+parsePath s    = parsePa s 1  
+
+parsePolygon s = parsePo s 1  
 
 }
