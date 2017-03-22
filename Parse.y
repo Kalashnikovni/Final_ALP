@@ -1,4 +1,3 @@
-
 {
 module Parse where
     
@@ -8,8 +7,6 @@ import Common
 -- Módulos prestados
 import Data.Char
 import Data.List
-import Control.Applicative 
-import Control.Monad (liftM, ap)
 }
 
 %name parseDef DefExp
@@ -29,19 +26,21 @@ import Control.Monad (liftM, ap)
     '='         { TEqual     }
     '('         { TParenO    }
     ')'         { TParenC    } 
-    'x'         { TCopy      }
-    KERF        { TKerf      }
+    '['         { TRBracketO }
+    ']'         { TRBracketC }
+    ','         { TComma     }
     NAME        { TName $$   }
-    POL         { TPol       }           
-    SCALE       { TScale     }
-    CON         { TCon       }
+    NAT         { TNat $$    }
     FLOAT       { TFloat $$  }
-    INT         { TNat $$    }
     X           { TX         }
     Y           { TY         }
+    KERF        { TKerf      }
+    CON         { TCon       }
     P1          { TPoint1    }
     P2          { TPoint2    }
-    EMPTYL      { TEmpty     }
+    POL         { TPol       }           
+    COPY        { TCopy      }
+    SCALE       { TScale     }
 
 %right ':'
 
@@ -49,7 +48,7 @@ import Control.Monad (liftM, ap)
 
 Machine    : KERF FloatExp Defs { Kerf $2 $3 }
 
-DefExp     : POL NAME '=' Polygon   { Dp $2 $4 1 }
+DefExp     : POL NAME '=' BPolygon  { Dp $2 $4 1 }
            | CON NAME '=' Container { Dc $2 $4 1 }  
  
 FloatExp   :: { Float }
@@ -73,19 +72,21 @@ Atom       : FLOAT            { $1 }
 Point      :: { MyPoint }
 Point      : X FloatExp Y FloatExp { ($2, $4) }
 
-PointList  : EMPTYL          { []      }
-           | Point PointList { $1 : $2 }
+BPolygon   :: { Polygon }
+BPolygon   : '[' ']'         { [] }
+           | '[' Polygon ']' { $2 }
 
 Polygon    :: { Polygon }
-Polygon    : Point Point Point PointList { P ($1 : ($2 : ($3 : $4))) }
+Polygon    : Point ',' Polygon { $1 : $3 }
+           | Point             { [$1]    }
 
 Container  :: { Container }
 Container  : P1 Point P2 Point   { C { p1x = fst $2, p1y = snd $2, p2x = fst $4, p2y = snd $4, rid = 0 } }
 
-Defs       : DefExp Defs                                     { $1 : $2                          }
-           |                                                 { []                               }
-           | POL NAME '=' Polygon 'x' INT SCALE FLOAT Defs   { copytimes (Dp $2 $4 $8) $6 ++ $9 }
-           | CON NAME '=' Container 'x' INT SCALE FLOAT Defs { copytimes (Dc $2 $4 $8) $6 ++ $9 } 
+Defs       : DefExp Defs                                      { $1 : $2                          }
+           |                                                  { []                               }
+           | POL NAME '=' BPolygon COPY NAT SCALE FLOAT Defs  { copytimes (Dp $2 $4 $8) $6 ++ $9 }
+           | CON NAME '=' Container COPY NAT SCALE FLOAT Defs { copytimes (Dc $2 $4 $8) $6 ++ $9 } 
 
 
 {
@@ -127,26 +128,23 @@ data Token
     | TTimes     
     | TDiv       
     | TEqual
-    | TCopy
-    | TPoint     
     | TParenO    
     | TParenC     
-    | TKerf
-    | TPol
-    | TScale
-    | TCon
+    | TRBracketO
+    | TRBracketC 
+    | TComma
     | TName String
-    | TFloat Float
     | TNat Int
+    | TFloat Float
     | TX
     | TY
-    | TPointL    
-    | TPolygon   
-    | TPolygonL  
+    | TKerf
+    | TCon
     | TPoint1    
     | TPoint2    
-    | TContainer 
-    | TEmpty
+    | TPol
+    | TCopy
+    | TScale
     | TEof
     deriving (Eq, Show)
 
@@ -168,8 +166,9 @@ lexer cont ('/':cs)       = cont TDiv cs
 lexer cont ('=':cs)       = cont TEqual cs
 lexer cont ('(':cs)       = cont TParenO cs
 lexer cont (')':cs)       = cont TParenC cs
-lexer cont ('[':cs)       = lexer cont cs
-lexer cont (']':cs)       = cont TEmpty cs
+lexer cont ('[':cs)       = cont TRBracketO cs
+lexer cont (']':cs)       = cont TRBracketC cs
+lexer cont (',':cs)       = cont TComma cs
 
 lexNum cont [] = cont TEof []
 lexNum cont cs = if null res 
