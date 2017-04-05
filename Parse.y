@@ -48,8 +48,8 @@ import Data.List
 
 Machine    : KERF FloatExp Defs { Kerf $2 $3 }
 
-DefExp     : POL NAME '=' BPolygon  { Dp $2 $4 1 }
-           | CON NAME '=' Container { Dc $2 $4 1 }  
+DefExp     : POL NAME '=' BPolygon  { Dp (P {p = $4, pn = $2}) 1 }
+           | CON NAME '=' Container { Dc ($4 {nc = $2}) 1        }  
  
 FloatExp   :: { Float }
 FloatExp   : FloatExp '+' Term { $1 + $3 }
@@ -72,21 +72,21 @@ Atom       : FLOAT            { $1 }
 Point      :: { MyPoint }
 Point      : X FloatExp Y FloatExp { ($2, $4) }
 
-BPolygon   :: { Polygon }
+BPolygon   :: { [MyPoint] }
 BPolygon   : '[' ']'         { [] }
            | '[' Polygon ']' { $2 }
 
-Polygon    :: { Polygon }
+Polygon    :: { [MyPoint] }
 Polygon    : Point ',' Polygon { $1 : $3 }
            | Point             { [$1]    }
 
 Container  :: { Container }
 Container  : P1 Point P2 Point   { C { p1x = fst $2, p1y = snd $2, p2x = fst $4, p2y = snd $4, rid = 0 } }
 
-Defs       : DefExp Defs                                      { $1 : $2                          }
-           |                                                  { []                               }
-           | POL NAME '=' BPolygon COPY NAT SCALE FLOAT Defs  { copytimes (Dp $2 $4 $8) $6 ++ $9 }
-           | CON NAME '=' Container COPY NAT SCALE FLOAT Defs { copytimes (Dc $2 $4 $8) $6 ++ $9 } 
+Defs       : DefExp Defs                                      { $1 : $2                                          }
+           |                                                  { []                                               }
+           | POL NAME '=' BPolygon COPY NAT SCALE FLOAT Defs  { copytimes (Dp (P {p = $4, pn = $2}) $8) $6 ++ $9 }
+           | CON NAME '=' Container COPY NAT SCALE FLOAT Defs { copytimes (Dc ($4 {nc = $2}) $8) $6 ++ $9        } 
 
 
 {

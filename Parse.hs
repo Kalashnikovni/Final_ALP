@@ -17,7 +17,7 @@ data HappyAbsSyn t6 t7 t16
 	| HappyAbsSyn7 t7
 	| HappyAbsSyn8 (Float)
 	| HappyAbsSyn12 (MyPoint)
-	| HappyAbsSyn13 (Polygon)
+	| HappyAbsSyn13 ([MyPoint])
 	| HappyAbsSyn15 (Container)
 	| HappyAbsSyn16 t16
 
@@ -313,7 +313,7 @@ happyReduction_4 ((HappyAbsSyn13  happy_var_4) `HappyStk`
 	_ `HappyStk`
 	happyRest)
 	 = HappyAbsSyn7
-		 (Dp happy_var_2 happy_var_4 1
+		 (Dp (P {p = happy_var_4, pn = happy_var_2}) 1
 	) `HappyStk` happyRest
 
 happyReduce_5 = happyReduce 4 7 happyReduction_5
@@ -323,7 +323,7 @@ happyReduction_5 ((HappyAbsSyn15  happy_var_4) `HappyStk`
 	_ `HappyStk`
 	happyRest)
 	 = HappyAbsSyn7
-		 (Dc happy_var_2 happy_var_4 1
+		 (Dc (happy_var_4 {nc = happy_var_2}) 1
 	) `HappyStk` happyRest
 
 happyReduce_6 = happySpecReduce_3  8 happyReduction_6
@@ -484,7 +484,7 @@ happyReduction_24 ((HappyAbsSyn16  happy_var_9) `HappyStk`
 	_ `HappyStk`
 	happyRest)
 	 = HappyAbsSyn16
-		 (copytimes (Dp happy_var_2 happy_var_4 happy_var_8) happy_var_6 ++ happy_var_9
+		 (copytimes (Dp (P {p = happy_var_4, pn = happy_var_2}) happy_var_8) happy_var_6 ++ happy_var_9
 	) `HappyStk` happyRest
 
 happyReduce_25 = happyReduce 9 16 happyReduction_25
@@ -499,7 +499,7 @@ happyReduction_25 ((HappyAbsSyn16  happy_var_9) `HappyStk`
 	_ `HappyStk`
 	happyRest)
 	 = HappyAbsSyn16
-		 (copytimes (Dc happy_var_2 happy_var_4 happy_var_8) happy_var_6 ++ happy_var_9
+		 (copytimes (Dc (happy_var_4 {nc = happy_var_2}) happy_var_8) happy_var_6 ++ happy_var_9
 	) `HappyStk` happyRest
 
 happyNewToken action sts stk

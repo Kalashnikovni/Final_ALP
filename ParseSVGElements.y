@@ -1,5 +1,5 @@
 {
-module Parse_SVGElements where
+module ParseSVGElements where
     
 -- Módulos propios
 import Common
@@ -11,7 +11,7 @@ import Data.List
 
 %name parseR Rect
 %name parsePo Polygon
-%name parsePa SPath 
+%name parsePa Path 
 
 %tokentype { Token }
 %error     { parseError }
@@ -31,6 +31,11 @@ import Data.List
     '-'    { TMinus     }  
     ','    { TComma     }  
     FLOAT  { TFloat $$  }
+    NAME   { TName $$   }
+    SCALE  { TScale     }
+    SKEWX  { TSkewX     }
+    SKEWY  { TSkewY     }
+    MATRIX { TMatrix    }
 
 %%
 
@@ -41,26 +46,46 @@ Point :: { MyPoint }
 Point : FloatExp FloatExp     { ($1, $2) }
       | FloatExp ',' FloatExp { ($1, $3) }
 
-Rect  :: { Container }
-Rect  : FloatExp FloatExp { C {p1x = 0, p1y = 0, p2x = $1, p2y = $2, rid = 0} }
+PointList :: { [MyPoint] }
+PointList :                 { []      }
+          | Point PointList { $1 : $2 } 
 
-Polygon :: { Polygon }
-Polygon :               { []      }
-        | Point Polygon { $1 : $2 } 
+Transform : SCALE FloatExp                                                                   { Scale $2                   }
+          | SKEWX FloatExp                                                                   { SkewX $2                   }
+          | SKEWY FloatExp                                                                   { SkewY $2                   }
+          | MATRIX FloatExp ',' FloatExp ',' FloatExp ',' FloatExp ',' FloatExp ',' FloatExp { Matrix $2 $4 $6 $8 $10 $12 } 
+
+TransformList :                         { []      }
+              | Transform TransformList { $1 : $2 }
+
+Rect  :: { Rect }
+Rect  : FloatExp FloatExp                    { Rect {h = $1, w = $2, tr = [], nr = ""} }
+      | FloatExp FloatExp NAME               { Rect {h = $1, w = $2, tr = [], nr = $3} }
+      | FloatExp FloatExp TransformList NAME { Rect {h = $1, w = $2, tr = $3, nr = $4} }
+
+Polygon :: { SVGPolygon }
+Polygon : PointList                    { Pol {po = $1, tpo = [], npo = ""} }
+        | PointList NAME               { Pol {po = $1, tpo = [], npo = $2} }
+        | PointList TransformList NAME { Pol {po = $1, tpo = $2, npo = $3} }
 
 SPath :: { [PathCommand] }
-SPath : M Point Path     { M_abs $2 : $3 }
-      | m Point Path     { M_rel $2 : $3 }
+SPath : M Point PathL { M_abs $2 : $3 }
+      | m Point PathL { M_rel $2 : $3 }
 
-Path  :: { [PathCommand] }
-Path  : h FloatExp Path { H_rel $2 : $3    }
-      | H FloatExp Path { H_rel $2 : $3    }
-      | v FloatExp Path { V_abs $2 : $3    }
-      | V FloatExp Path { V_abs $2 : $3    }
-      | l Point Path    { L_rel $2 : $3    }
-      | L Point Path    { L_abs $2 : $3    }
-      | Point Path      { Complete $1 : $2 }
-      | Z               { [Z]              }
+PathL :: { [PathCommand] }
+PathL : h FloatExp PathL { H_rel $2 : $3    }
+      | H FloatExp PathL { H_rel $2 : $3    }
+      | v FloatExp PathL { V_abs $2 : $3    }
+      | V FloatExp PathL { V_abs $2 : $3    }
+      | l Point PathL    { L_rel $2 : $3    }
+      | L Point PathL    { L_abs $2 : $3    }
+      | Point PathL      { Complete $1 : $2 }
+      | Z                { [Z]              }
+
+Path  :: { Path }
+Path  : SPath                    { Path {pa = $1, tpa = [], npa = ""} }
+      | SPath NAME               { Path {pa = $1, tpa = [], npa = $2} }
+      | SPath TransformList NAME { Path {pa = $1, tpa = $2, npa = $3} }
 
 {
 
@@ -103,6 +128,12 @@ data Token
     | TMinus
     | TComma
     | TFloat Float
+    | TName String
+    | TScale
+    | TSkewX
+    | TSkewY
+    | TMatrix
+    | TPath
     | TEof
     deriving (Eq, Show)
 
@@ -112,22 +143,14 @@ data Token
 
 lexer cont []        = cont TEof []
 lexer cont ('\n':cs) = \l -> lexer cont cs (l + 1)
-lexer cont ('m':cs)  = cont Tm cs
-lexer cont ('M':cs)  = cont TM cs
-lexer cont ('h':cs)  = cont Th cs
-lexer cont ('H':cs)  = cont TH cs
-lexer cont ('v':cs)  = cont Tv cs
-lexer cont ('V':cs)  = cont TV cs
-lexer cont ('l':cs)  = cont Tl cs
-lexer cont ('L':cs)  = cont TL cs
-lexer cont ('z':cs)  = cont TZ cs
-lexer cont ('Z':cs)  = cont TZ cs
-lexer cont ('-':cs)  = cont TMinus cs
-lexer cont (',':cs)  = cont TComma cs
 lexer cont (c:cs)   
     | isDigit c = lexNum cont (c:cs)     
     | isSpace c = lexer cont cs
-    | otherwise = cont TEof []
+    | isAlpha c = lexString cont (c:cs)
+lexer cont ('-':cs)  = cont TMinus cs
+lexer cont (',':cs)  = cont TComma cs
+lexer cont ('(':cs)  = lexer cont cs
+lexer cont (')':cs)  = lexer cont cs
 
 lexNum cont [] = cont TEof []
 lexNum cont cs = if null res 
@@ -140,6 +163,27 @@ lexNum cont cs = if null res
     where (int, res) = span isDigit cs  
           fres       = head res
           fromInt    = cont (TFloat (read int :: Float)) res
+
+lexString cont [] = cont TEof []
+lexString cont cs = case span isAlpha cs of
+                        ("m", res)      -> cont Tm res
+                        ("M", res)      -> cont TM res
+                        ("h", res)      -> cont Th res
+                        ("H", res)      -> cont TH res
+                        ("v", res)      -> cont Tv res
+                        ("V", res)      -> cont TV res
+                        ("l", res)      -> cont Tl res
+                        ("L", res)      -> cont TL res
+                        ("z", res)      -> cont TZ res
+                        ("Z", res)      -> cont TZ res
+                        ("scale", res)  -> cont TScale res
+                        ("skewX", res)  -> cont TSkewX res 
+                        ("skewY", res)  -> cont TSkewY res 
+                        ("matrix", res) -> cont TMatrix res
+                        ("path", res)   -> cont TPath res
+                        (ran, res)      -> let (name, res') = span isAlphaNum (ran ++ res)
+                                           in cont (TName name) res'
+                
 
 parseRect s    = parseR s 1
 
