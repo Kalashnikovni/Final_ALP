@@ -4,14 +4,14 @@ module Main where
 import Common
 import Parse
 import Parse_SVG
-import Parse_Path
+import ParseSVGElements as PSE
 import Eval
 import Rectangles
 
 -- Módulos prestados 
-import Data.List as List
+import Data.List as L
 import Data.ByteString as BS
-import Data.Text as Text
+import Data.Text as T
 
 import Text.XmlHtml as XML
 
@@ -35,15 +35,20 @@ data Command = Help
                | Noop
                | Draw deriving Show
 
-data State   = S { env :: Machine } 
+data Search  = R -- Rectangle
+               | Po -- Polygon
+               | Pa -- Path
+               | All deriving Show -- Everything
+
+data State   = S { k :: Float, defs :: [Def], svg :: [SVG] } deriving Show
 
 -- Code --
 ----------
 
-main :: IO ()
-main = print "Main"
+--main :: IO ()
+--main = print "Main"
 
-{-main :: IO ()
+main :: IO ()
 main = do printHello
           args <- getArgs
           readEvalPrintLoop args (S {env = []})
@@ -60,35 +65,62 @@ readEvalPrintLoop args s =
                     Just ""   -> return()
                     Just line -> do addHistory line                             
                                     readEvalPrintLoop args s
-    in do x <- compileFiles args
+    in do x <- parseFiles args
 
-compileFiles :: [String] -> State -> IO State
-compileFiles [] s       = return (S {env = Kerf 0 []})
-compileFiles (f : fs) s = do x <- compileFile
--}
+parseFiles :: [String] -> State -> IO State
+parseFiles [] s       = return s
+parseFiles (f : fs) s = do x <- parseFile
 
-compileFile :: String -> State -> IO State
-compileFile f s = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
-                     if List.isSuffixOf ".svg" f
-                     then do str <- catch (BS.readFile f)
-                                    (\e -> do let err = show (e :: IOException)
-                                              SIO.hPutStr stderr ("*** Error: no se pudo abrir" ++ err ++ "\n")
-                                              return "")
-                             case parseXML "" str of
-                                Left st -> return s
-                                Right d -> let dcon = docContent d
-                                               c    = get_elements dcon lookc "rect"
-                                               po   = get_elements dcon lookp "polygon"
-                                               pa   = get_elements dcon lookd "path"
-                                           in do print pa
-                                                 return s
-                     else do str <- catch (SIO.readFile f)
-                                          (\e -> do let err = show (e :: IOException)
-                                                    SIO.hPutStr stderr ("*** Error: no se pudo abrir " ++ err ++ "\n")
-                                                    return "")  
-                             case parseMac str of
-                                Parse.Failed st -> do SIO.putStrLn st
-                                                      return s 
-                                Parse.Ok v      -> return s
+-- El tercer argumento es para saber qué clase de elementos se busca dentro del archivo SVG
+parseSVGFile :: String -> State -> Search -> IO State
+parseSVGFile f s t = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
+                        if L.isSuffixOf ".svg" f
+                        then do str <- catch (BS.readFile f)
+                                       (\e -> do let err = show (e :: IOException)
+                                                 SIO.hPutStr stderr ("*** Error: no se pudo abrir" ++ err ++ "\n")
+                                                 return "")
+                                case parseXML "" str of
+                                     Left st -> do SIO.putStrLn $ f ++ st
+                                                   return s
+                                     Right d -> let dcon = docContent d
+                                                in case t of
+                                                    R   -> parse (L.map T.unpack (getElements dcon lookR "rect")) s t
+                                                    Po  -> parse (L.map T.unpack (getElements dcon lookP "polygon")) s t
+                                                    Pa  -> parse (L.map T.unpack (getElements dcon lookD "path")) s t
+                                                    All -> do parse (L.map T.unpack (getElements dcon lookR "rect")) s R
+                                                              parse (L.map T.unpack (getElements dcon lookP "polygon")) s Po
+                                                              parse (L.map T.unpack (getElements dcon lookD "path")) s P
+                        else do SIO.putStrLn "*** Error: no es un archivo SVG"
+                                return s
 
-evalFile = print "Hey!"
+parse []     s t = return s
+parse (x:xs) s t = case t of 
+                    R  -> do s' <- parse' x parseRect s SVGR
+                             parse xs s' t                                        
+                    Po -> do s' <- parse' x parsePolygon s SVGPo
+                             parse xs s' t                                        
+                    Pa -> do s' <- parse' x parsePath s SVGPa
+                             parse xs s' t                                        
+
+parse' x p s f = case p x of
+                     PSE.Failed st -> do SIO.putStrLn st
+                                         return s
+                     PSE.Ok v      -> return (s {svg = f v : svg s})
+
+parseFile :: String -> State -> IO State
+parseFile f s = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
+                   str <- catch (SIO.readFile f)
+                                (\e -> do let err = show (e :: IOException)
+                                          SIO.hPutStr stderr ("*** Error: no se pudo abrir " ++ err ++ "\n")
+                                          return "")  
+                   case parseMac str of
+                        Parse.Failed st -> do SIO.putStrLn $ f ++ ": " ++ st
+                                              return s 
+                        Parse.Ok v      -> return (s {k = getKerf v, defs = getDefs v ++ defs s})
+
+getDefs :: Machine -> [Def]
+getDefs (Kerf _ ds) = ds
+
+getKerf :: Machine -> Float
+getKerf (Kerf k _) = k
+

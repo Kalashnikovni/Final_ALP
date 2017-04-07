@@ -35,6 +35,7 @@ data Transform   = Scale Float
                  | SkewX Float
                  | SkewY Float
                  | Matrix Float Float Float Float Float Float 
+                 | Thrash
               deriving Show
 
 data Rect        = Rect {w  :: Float,
@@ -61,3 +62,8 @@ data PathCommand = M_rel MyPoint
 data Path        = Path {pa  :: [PathCommand],
                          tpa :: [Transform],
                          npa :: String} deriving Show
+
+data SVG         = SVGR Rect
+                 | SVGPo SVGPolygon
+                 | SVGPa Path
+              deriving Show

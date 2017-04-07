@@ -36,6 +36,8 @@ import Data.List
     SKEWX  { TSkewX     }
     SKEWY  { TSkewY     }
     MATRIX { TMatrix    }
+    TRANSLATE { TTranslate }
+    ROTATE    { TRotate    }
 
 %%
 
@@ -50,7 +52,10 @@ PointList :: { [MyPoint] }
 PointList :                 { []      }
           | Point PointList { $1 : $2 } 
 
-Transform : SCALE FloatExp                                                                   { Scale $2                   }
+Transform : TRANSLATE FloatExp                                                               { Thrash                     }
+          | TRANSLATE Point                                                                  { Thrash                     }
+          | ROTATE FloatExp                                                                  { Thrash                     }
+          | SCALE FloatExp                                                                   { Scale $2                   }
           | SKEWX FloatExp                                                                   { SkewX $2                   }
           | SKEWY FloatExp                                                                   { SkewY $2                   }
           | MATRIX FloatExp ',' FloatExp ',' FloatExp ',' FloatExp ',' FloatExp ',' FloatExp { Matrix $2 $4 $6 $8 $10 $12 } 
@@ -58,10 +63,13 @@ Transform : SCALE FloatExp                                                      
 TransformList :                         { []      }
               | Transform TransformList { $1 : $2 }
 
+ScaleList :                          { []            }
+          | SCALE FloatExp ScaleList { Scale $2 : $3 }
+
 Rect  :: { Rect }
-Rect  : FloatExp FloatExp                    { Rect {h = $1, w = $2, tr = [], nr = ""} }
-      | FloatExp FloatExp NAME               { Rect {h = $1, w = $2, tr = [], nr = $3} }
-      | FloatExp FloatExp TransformList NAME { Rect {h = $1, w = $2, tr = $3, nr = $4} }
+Rect  : FloatExp FloatExp                { Rect {h = $1, w = $2, tr = [], nr = ""} }
+      | FloatExp FloatExp NAME           { Rect {h = $1, w = $2, tr = [], nr = $3} }
+      | FloatExp FloatExp ScaleList NAME { Rect {h = $1, w = $2, tr = $3, nr = $4} }
 
 Polygon :: { SVGPolygon }
 Polygon : PointList                    { Pol {po = $1, tpo = [], npo = ""} }
@@ -133,7 +141,8 @@ data Token
     | TSkewX
     | TSkewY
     | TMatrix
-    | TPath
+    | TTranslate
+    | TRotate
     | TEof
     deriving (Eq, Show)
 
@@ -166,23 +175,24 @@ lexNum cont cs = if null res
 
 lexString cont [] = cont TEof []
 lexString cont cs = case span isAlpha cs of
-                        ("m", res)      -> cont Tm res
-                        ("M", res)      -> cont TM res
-                        ("h", res)      -> cont Th res
-                        ("H", res)      -> cont TH res
-                        ("v", res)      -> cont Tv res
-                        ("V", res)      -> cont TV res
-                        ("l", res)      -> cont Tl res
-                        ("L", res)      -> cont TL res
-                        ("z", res)      -> cont TZ res
-                        ("Z", res)      -> cont TZ res
-                        ("scale", res)  -> cont TScale res
-                        ("skewX", res)  -> cont TSkewX res 
-                        ("skewY", res)  -> cont TSkewY res 
-                        ("matrix", res) -> cont TMatrix res
-                        ("path", res)   -> cont TPath res
-                        (ran, res)      -> let (name, res') = span isAlphaNum (ran ++ res)
-                                           in cont (TName name) res'
+                        ("m", res)        -> cont Tm res
+                        ("M", res)        -> cont TM res
+                        ("h", res)        -> cont Th res
+                        ("H", res)        -> cont TH res
+                        ("v", res)        -> cont Tv res
+                        ("V", res)        -> cont TV res
+                        ("l", res)        -> cont Tl res
+                        ("L", res)        -> cont TL res
+                        ("z", res)        -> cont TZ res
+                        ("Z", res)        -> cont TZ res
+                        ("scale", res)    -> cont TScale res
+                        ("skewX", res)    -> cont TSkewX res 
+                        ("skewY", res)    -> cont TSkewY res 
+                        ("matrix", res)   -> cont TMatrix res
+                        ("translate",res) -> cont TTranslate res
+                        ("rotate", res)   -> cont TRotate res
+                        (ran, res)        -> let (name, res') = span isAlphaNum (ran ++ res)
+                                             in cont (TName name) res'
                 
 
 parseRect s    = parseR s 1
