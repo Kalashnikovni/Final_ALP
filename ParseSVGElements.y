@@ -52,6 +52,13 @@ PointList :: { [MyPoint] }
 PointList :                 { []      }
           | Point PointList { $1 : $2 } 
 
+Sufix : TransformList Name { ($1, $2) }
+
+Name :      { "" }
+     | NAME { $1 }
+
+SufixS : ScaleList Name { ($1, $2) }
+
 Transform : TRANSLATE FloatExp                                                               { Thrash                     }
           | TRANSLATE Point                                                                  { Thrash                     }
           | ROTATE FloatExp                                                                  { Thrash                     }
@@ -67,14 +74,10 @@ ScaleList :                          { []            }
           | SCALE FloatExp ScaleList { Scale $2 : $3 }
 
 Rect  :: { Rect }
-Rect  : FloatExp FloatExp                { Rect {h = $1, w = $2, tr = [], nr = ""} }
-      | FloatExp FloatExp NAME           { Rect {h = $1, w = $2, tr = [], nr = $3} }
-      | FloatExp FloatExp ScaleList NAME { Rect {h = $1, w = $2, tr = $3, nr = $4} }
+Rect  : FloatExp FloatExp SufixS { Rect {h = $1, w = $2, tr = fst $3, nr = snd $3} }
 
 Polygon :: { SVGPolygon }
-Polygon : PointList                    { Pol {po = $1, tpo = [], npo = ""} }
-        | PointList NAME               { Pol {po = $1, tpo = [], npo = $2} }
-        | PointList TransformList NAME { Pol {po = $1, tpo = $2, npo = $3} }
+Polygon : PointList Sufix { Pol {po = $1, tpo = fst $2, npo = snd $2} }
 
 SPath :: { [PathCommand] }
 SPath : M Point PathL { M_abs $2 : $3 }
@@ -91,9 +94,7 @@ PathL : h FloatExp PathL { H_rel $2 : $3    }
       | Z                { [Z]              }
 
 Path  :: { Path }
-Path  : SPath                    { Path {pa = $1, tpa = [], npa = ""} }
-      | SPath NAME               { Path {pa = $1, tpa = [], npa = $2} }
-      | SPath TransformList NAME { Path {pa = $1, tpa = $2, npa = $3} }
+Path  : SPath Sufix { Path {pa = $1, tpa = fst $2, npa = snd $2} }
 
 {
 
