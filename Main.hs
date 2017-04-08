@@ -12,6 +12,7 @@ import Rectangles
 import Data.List as L
 import Data.ByteString as BS
 import Data.Text as T
+import Data.String as S
 
 import Text.XmlHtml as XML
 
@@ -26,19 +27,24 @@ import Control.Exception
 
 -- Data definitions --
 ----------------------
-data Command = Help
-               | Load String 
-               | LoadSVGC String
-               | LoadSVGP String
-               | DefPol String
-               | DefCon String
-               | Noop
-               | Draw deriving Show
+data Command = Noop
+               | Help -- :?
+               | SetKerf String -- :sk 
+               | Load [String] -- :l
+               | LoadSVGC [String] -- :lsc
+               | LoadSVGPo [String] -- :lspo
+               | LoadSVGPa [String] -- :lspa
+               | LoadSVGAll [String] -- :lsa
+               | DefPol String -- :dp
+               | DefCon String -- :dc
+               | Draw -- :d
+            deriving Show
 
 data Search  = R -- Rectangle
                | Po -- Polygon
                | Pa -- Path
-               | All deriving Show -- Everything
+               | All -- Everything 
+            deriving Show 
 
 data State   = S { k :: Float, defs :: [Def], svg :: [SVG] } deriving Show
 
@@ -51,25 +57,71 @@ data State   = S { k :: Float, defs :: [Def], svg :: [SVG] } deriving Show
 main :: IO ()
 main = do printHello
           args <- getArgs
-          readEvalPrintLoop args (S {env = []})
+          readEvalPrintLoop args (S {k = 0, defs = [], svg = []})
 
 printHello :: IO ()
-printHello = do putStrLn "\n*** Intérprete de polígonos ***" 
-                putStrLn ":? para desplegar ayuda"
+printHello = do SIO.putStrLn "\n*** Intérprete de polígonos ***" 
+                SIO.putStrLn ":? para desplegar ayuda\n"
+
+printHelp :: IO ()
+printHelp = do SIO.putStrLn "\nLista de comandos:"
+               SIO.putStrLn ":? -- Ayuda"
+               SIO.putStrLn ":sk v -- Fijar el valor del kerf en v"
+               SIO.putStrLn ":l f -- Cargar el archivo f"
+               SIO.putStrLn ":lc f -- Cargar los rectángulos definidos en el archivo SVG f"
+               SIO.putStrLn ":lpo f -- Cargar los polígonos definidos en el archivo SVG f"
+               SIO.putStrLn ":lpa f -- Cargar los paths definidos en el archivo SVG f"
+               SIO.putStrLn ":la f -- Cargar los rectángulos, polígonos y paths definidos en el archivo SVG f"
+               SIO.putStrLn ":dp c -- Definir el rectángulo c desde el intérprete"
+               SIO.putStrLn ":dp p -- Definir el polígono p desde el intérprete"
+               SIO.putStrLn ":d -- Ejecutar el algoritmo con todos los elementos cargados\n"
+               
 
 readEvalPrintLoop :: [String] -> State -> IO ()
 readEvalPrintLoop args s = 
-    let loop = do maybeLine <- readline ""
-                  case maybeLine of
-                    Nothing   -> return ()
-                    Just ""   -> return()
-                    Just line -> do addHistory line                             
-                                    readEvalPrintLoop args s
-    in do x <- parseFiles args
+    do maybeLine <- readline ">> "
+       case maybeLine of
+           Nothing   -> return ()
+           Just ":q" -> return ()
+           Just line -> do addHistory line                             
+                           s' <- parseCommands line s
+                           print s'
+                           readEvalPrintLoop args s'
 
-parseFiles :: [String] -> State -> IO State
-parseFiles [] s       = return s
-parseFiles (f : fs) s = do x <- parseFile
+parseCommands :: String -> State -> IO State
+parseCommands str s
+    | L.null w  = return s
+    | otherwise = case L.head w of
+                    ":?"   -> do printHelp
+                                 return s
+                    ":sk"  -> case parseFloat t' of
+                                Parse.Ok v       -> return (s {k = v})
+                                Parse.Failed str -> do SIO.putStrLn str
+                                                       return s
+                    ":l"   -> parseFiles t s
+                    ":lc"  -> parseSVGFiles t s R
+                    ":lpo" -> parseSVGFiles t s Po
+                    ":lpa" -> parseSVGFiles t s Pa
+                    ":la"  -> parseSVGFiles t s All
+                    ":dp"  -> case parseDefs t' 1 of
+                                Parse.Ok v       -> return (s {defs = v})
+                                Parse.Failed str -> do SIO.putStrLn str
+                                                       return s
+                    ":dc"  -> case parseDefs t' 1 of
+                                Parse.Ok v       -> return (s {defs = v})
+                                Parse.Failed str -> do SIO.putStrLn str
+                                                       return s
+                    ":d"   -> return s
+                    _      -> do SIO.putStrLn "Comando desconocido, por favor reintente"
+                                 return s
+    where w  = L.words str
+          t  = L.tail w
+          t' = S.unwords t
+                 
+parseSVGFiles :: [String] -> State -> Search -> IO State
+parseSVGFiles [] s _     = return s
+parseSVGFiles (f:fs) s t = do s' <- parseSVGFile f s t
+                              parseSVGFiles fs s' t 
 
 -- El tercer argumento es para saber qué clase de elementos se busca dentro del archivo SVG
 parseSVGFile :: String -> State -> Search -> IO State
@@ -87,9 +139,9 @@ parseSVGFile f s t = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
                                                     R   -> parse (L.map T.unpack (getElements dcon lookR "rect")) s t
                                                     Po  -> parse (L.map T.unpack (getElements dcon lookP "polygon")) s t
                                                     Pa  -> parse (L.map T.unpack (getElements dcon lookD "path")) s t
-                                                    All -> do parse (L.map T.unpack (getElements dcon lookR "rect")) s R
-                                                              parse (L.map T.unpack (getElements dcon lookP "polygon")) s Po
-                                                              parse (L.map T.unpack (getElements dcon lookD "path")) s P
+                                                    All -> do s'  <- parse (L.map T.unpack (getElements dcon lookR "rect")) s R
+                                                              s'' <-parse (L.map T.unpack (getElements dcon lookP "polygon")) s' Po
+                                                              parse (L.map T.unpack (getElements dcon lookD "path")) s'' Pa
                         else do SIO.putStrLn "*** Error: no es un archivo SVG"
                                 return s
 
@@ -107,6 +159,11 @@ parse' x p s f = case p x of
                                          return s
                      PSE.Ok v      -> return (s {svg = f v : svg s})
 
+parseFiles :: [String] -> State -> IO State
+parseFiles [] s     = return s
+parseFiles (f:fs) s = do s' <- parseFile f s
+                         parseFiles fs s'  
+
 parseFile :: String -> State -> IO State
 parseFile f s = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
                    str <- catch (SIO.readFile f)
@@ -123,4 +180,3 @@ getDefs (Kerf _ ds) = ds
 
 getKerf :: Machine -> Float
 getKerf (Kerf k _) = k
-
