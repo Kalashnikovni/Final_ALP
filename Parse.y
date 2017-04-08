@@ -9,6 +9,7 @@ import Data.Char
 import Data.List
 }
 
+%name parseF FloatExp
 %name parseDef DefExp
 %name parseDefs Defs
 %name parseM Machine
@@ -207,5 +208,7 @@ lexNat cont (c:cs)
                   in cont (TNat (read num :: Int)) res 
 
 parseMac s = parseM s 1
+
+parseFloat s = parseF s 1
 
 }
