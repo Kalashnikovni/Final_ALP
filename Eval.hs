@@ -6,7 +6,6 @@ import Common
 -- Módulos prestados
 import Data.List
 import Data.Either
---import qualified Data.Map as Map
 import Data.Geometry.Point
 import Data.Geometry.LineSegment
 import Data.Ext
@@ -16,6 +15,11 @@ import Algorithms.Geometry.LineSegmentIntersection.BentleyOttmann as BO
 import Graphics.Gloss.Geometry.Line
 import Graphics.Gloss.Data.Vector 
 
+
+-- Data Types --
+----------------
+
+data Quadrant = I | II | III | IV deriving (Eq, Show)
 
 -- Definitions --
 -----------------
@@ -48,7 +52,8 @@ addKerf :: Float -> Polygon -> Polygon
 addKerf o po
     | length l < 3 = po
     | otherwise    = newPoints (l ++ [head l]) 
-    where l = linearize o (p po ++ [head (p po)]) (p po) 
+    where ppo = p po
+          l   = linearize o (ppo ++ [head ppo]) ppo 
 
 -- Obtiene las rectas "offseteadas" correspondientes a cada segmento
 linearize :: Float -> [MyPoint] -> [MyPoint] -> [(MyPoint, MyPoint)]
@@ -68,18 +73,53 @@ newPoints (x:(y:zs)) = case intersectLineLine (fst x) (snd x) (fst y) (snd y) of
                         Just pn -> po {p = pn : (p po)} --p : (newPoints (y:zs))
     where po = newPoints (y:zs)
 
--- El tercer punto dará cómo "mover" la recta
 offsetLine :: Float -> MyPoint -> MyPoint -> MyPoint -> (MyPoint, MyPoint)
 offsetLine o p1 p2 p3
-    | b         = ((fst p1 - v1, snd p1 - v2), (fst p2 - v1, snd p2 - v2)) 
-    | otherwise = ((fst p1 + v1, snd p1 + v2), (fst p2 + v1, snd p2 + v2)) 
-    where v        = (snd p1 - snd p2, fst p2 - fst p1)
-          a        = o / magV v
-          (v1, v2) = mulSV a v
-          m        = (snd p2 - snd p1) / (fst p2 - fst p1) 
-          c        = snd p2 - m * fst p2
-          b        = m * fst p3 + c > snd p3
+    | fst p1 == fst p2 = if v > 0
+                         then if q == II
+                              then sp
+                              else sm  
+                         else if q == II
+                              then sm
+                              else sp 
+    | v > 0 = if q == I || q == IV
+              then pm
+              else pp
+    | v < 0 = if q == I || q == IV
+              then pp
+              else pm
+    where q     = whichQuadrant p1 p2
+          v     = (fst p2 - fst p1) * (snd p3 - snd p1) - (fst p3 - fst p1) * (snd p2 - snd p1) 
+          alpha = if q == I || q == II
+                  then angleVV (0,1) (fst p2 - fst p1, snd p2 - snd p1) 
+                  else pi - angleVV (0,1) (fst p2 - fst p1, snd p2 - snd p1) 
+          h     =  o / (sin alpha)
+          pp    = ((fst p1, snd p1 + h), (fst p2, snd p2 + h)) 
+          pm    = ((fst p1, snd p1 - h), (fst p2, snd p2 - h)) 
+          sp    = ((fst p1 + o, snd p1), (fst p2 + o, snd p2))
+          sm    = ((fst p1 - o, snd p1), (fst p2 - o, snd p2))
 
+determinant :: MyPoint -> MyPoint -> MyPoint -> Float
+determinant p1 p2 p3 = (fst p2 - fst p1) * (snd p3 - snd p1) - (fst p3 - fst p1) * (snd p2 - snd p1)
+
+whichQuadrant :: MyPoint -> MyPoint -> Eval.Quadrant
+whichQuadrant p1 p2 
+    | fst p1 < fst p2 && snd p1 <= snd p2 = I
+    | fst p1 >= fst p2 && snd p1 < snd p2 = II
+    | fst p1 > fst p2 && snd p1 >= snd p2 = III
+    | otherwise                           = IV 
+
+-- Las lineas argumento deben ser paralelas
+distLines :: MyPoint -> MyPoint -> MyPoint -> MyPoint -> Maybe Float
+distLines p1 p2 p3 p4 = case intersectLineLine p1 p2 p3 p4 of
+                            Nothing -> if fst p1 /= fst p2 
+                                       then Just $ abs (c2 - c1) / sqrt (m * m + b * b)
+                                       else Just $ abs (fst p1 - fst p3)
+                            _       -> Nothing
+    where c1 = m * fst p1 - snd p1 
+          c2 = m * fst p3 - snd p3
+          m  = (snd p2 - snd p1) / (fst p2 - fst p1)
+          b  = 1
 
 -- SVGFiles --
 --------------
