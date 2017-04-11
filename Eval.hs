@@ -71,7 +71,7 @@ newPoints []  = P {p = [], pn = ""}
 newPoints [x] = P {p = [], pn = ""}
 newPoints (x:(y:zs)) = case intersectLineLine (fst x) (snd x) (fst y) (snd y) of
                         Nothing -> po
-                        Just pn -> po {p = pn : (p po)} --p : (newPoints (y:zs))
+                        Just pn -> po {p = pn : (p po)} 
     where po = newPoints (y:zs)
 
 offsetLine :: Float -> MyPoint -> MyPoint -> MyPoint -> (MyPoint, MyPoint)
@@ -89,6 +89,7 @@ offsetLine o p1 p2 p3
     | v < 0 = if q == I || q == IV
               then pp
               else pm
+    | v == 0 = ((0, 0), p3)
     where q     = whichQuadrant p1 p2
           v     = (fst p2 - fst p1) * (snd p3 - snd p1) - (fst p3 - fst p1) * (snd p2 - snd p1) 
           alpha = if q == I || q == II
@@ -203,27 +204,27 @@ check3sides po = length (p po) >= 3
 checkIntersections po = length (BO.intersections (toLSegments (pol ++ [head pol]))) /= length pol
     where pol = p po
 
+toLSegments [x]        = [] 
+toLSegments (x:(y:ys)) = (ClosedLineSegment (point2 (fst x) (snd x) :+ ()) (point2 (fst y) (snd y) :+ ())) : (toLSegments (y:ys))
+
 checkIntersectionsSlow :: Polygon -> Bool
 checkIntersectionsSlow po = cIS (getSegs (p po ++ [head (p po)])) 
 
 cIS :: [(MyPoint, MyPoint)] -> Bool
 cIS []     = False
-cIS (x:xs) = if Eval.compare x xs 
-             then True
-             else cIS xs
+cIS (x:xs) = Eval.compare x xs || cIS xs
 
 compare :: (MyPoint, MyPoint) -> [(MyPoint, MyPoint)] -> Bool
 compare x []     = False
 compare x (y:ys) = case intersectSegSeg (fst x) (snd x) (fst y) (snd y) of
                     Just v -> if abs (fst v - fst (snd x)) <= 0.001 && abs (snd v - snd (snd x)) <= 0.001 
-                              then False
+                                 || abs (fst v - fst (fst x)) <= 0.001 && abs (snd v - snd (fst x)) <= 0.001
+                              then Eval.compare x ys
                               else True
-                    _      -> False
+                    _      -> Eval.compare x ys
 
 getSegs :: [MyPoint] -> [(MyPoint, MyPoint)]
 getSegs [x]        = []
 getSegs (x:(y:ys)) = (x,y) : (getSegs (y:ys))
 
-toLSegments [x]        = [] 
-toLSegments (x:(y:ys)) = (ClosedLineSegment (point2 (fst x) (snd x) :+ ()) (point2 (fst y) (snd y) :+ ())) : (toLSegments (y:ys))
 
