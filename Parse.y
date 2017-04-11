@@ -20,13 +20,8 @@ import Data.List
 %lexer     { lexer } { TEof }
 
 %token
-    '+'         { TPlus      }
     '-'         { TMinus     }
-    '*'         { TTimes     }
-    '/'         { TDiv       }
     '='         { TEqual     }
-    '('         { TParenO    }
-    ')'         { TParenC    } 
     '['         { TRBracketO }
     ']'         { TRBracketC }
     ','         { TComma     }
@@ -34,11 +29,8 @@ import Data.List
     NAT         { TNat $$    }
     FLOAT       { TFloat $$  }
     X           { TX         }
-    Y           { TY         }
     KERF        { TKerf      }
     CON         { TCon       }
-    P1          { TPoint1    }
-    P2          { TPoint2    }
     POL         { TPol       }           
     COPY        { TCopy      }
     SCALE       { TScale     }
@@ -47,31 +39,16 @@ import Data.List
 
 %%
 
+FloatExp   : '-' FLOAT { -$2 }
+           | FLOAT     { $1  }
+
 Machine    : KERF FloatExp Defs { Kerf $2 $3 }
 
 DefExp     : POL NAME '=' BPolygon  { Dp (P {p = $4, pn = $2}) 1 }
            | CON NAME '=' Container { Dc ($4 {nc = $2}) 1        }  
- 
-FloatExp   :: { Float }
-FloatExp   : FloatExp '+' Term { $1 + $3 }
-           | FloatExp '-' Term { $1 - $3 }
-           | Term              { $1      }
 
-Term      :: { Float }
-Term       : Term '*' Factor { $1 * $3 }
-           | Term '/' Factor { $1 / $3 } 
-           | Factor          { $1      }
-
-Factor     :: { Float }
-Factor     : '-' Atom   { - $2 }
-           | Atom       { $1   }
-
-Atom       :: { Float }
-Atom       : FLOAT            { $1 } 
-           | '(' FloatExp ')' { $2 }
-         
 Point      :: { MyPoint }
-Point      : X FloatExp Y FloatExp { ($2, $4) }
+Point      : FloatExp FloatExp  { ($1, $2) }
 
 BPolygon   :: { [MyPoint] }
 BPolygon   : '[' ']'         { [] }
@@ -82,7 +59,7 @@ Polygon    : Point ',' Polygon { $1 : $3 }
            | Point             { [$1]    }
 
 Container  :: { Container }
-Container  : P1 Point P2 Point   { C { p1x = fst $2, p1y = snd $2, p2x = fst $4, p2y = snd $4, rid = 0 } }
+Container  : FLOAT X FLOAT   { C { p1x = 0, p1y = 0, p2x = $1, p2y = $3, rid = 0, nc = ""} }
 
 Defs       : DefExp Defs                                      { $1 : $2                                          }
            |                                                  { []                                               }
@@ -124,13 +101,8 @@ parseError :: Token -> P a
 parseError _ = \s l -> failE ("Error de parseo en la linea " ++ show l) s l
 
 data Token  
-    = TPlus      
-    | TMinus     
-    | TTimes     
-    | TDiv       
+    = TMinus     
     | TEqual
-    | TParenO    
-    | TParenC     
     | TRBracketO
     | TRBracketC 
     | TComma
@@ -138,7 +110,6 @@ data Token
     | TNat Int
     | TFloat Float
     | TX
-    | TY
     | TKerf
     | TCon
     | TPoint1    
@@ -160,13 +131,8 @@ lexer cont (c:cs)
     | isAlpha c = lexString cont (c:cs)
     | isDigit c = lexNum cont (c:cs) 
 lexer cont ('-':('-':cs)) = lexer cont (dropWhile (/= '\n') cs)
-lexer cont ('+':cs)       = cont TPlus cs
 lexer cont ('-':cs)       = cont TMinus cs
-lexer cont ('*':cs)       = cont TTimes cs
-lexer cont ('/':cs)       = cont TDiv cs
 lexer cont ('=':cs)       = cont TEqual cs
-lexer cont ('(':cs)       = cont TParenO cs
-lexer cont (')':cs)       = cont TParenC cs
 lexer cont ('[':cs)       = cont TRBracketO cs
 lexer cont (']':cs)       = cont TRBracketC cs
 lexer cont (',':cs)       = cont TComma cs
@@ -190,19 +156,11 @@ lexString cont (c:cs) = case span isAlpha (c:cs) of
                          ("kerf", res)  -> cont TKerf res
                          ("pdef", res)  -> cont TPol res
                          ("cdef", res)  -> cont TCon res
-                         ("X", res)     -> cont TX res
-                         ("Y", res)     -> cont TY res   
+                         ("x", res)     -> cont TX res
                          ("copy", res)  -> cont TCopy res
                          ("scale", res) -> cont TScale res
-                         (po, res)      -> if po == "P"
-                                           then let (num, res') = span isDigit res
-                                                in if num == "1" 
-                                                   then cont TPoint1 res'
-                                                   else if num == "2"
-                                                        then cont TPoint2 res'
-                                                        else cont TEof [] 
-                                           else let (name, res') = span isAlphaNum (po ++ res)
-                                                in cont (TName name) res'  
+                         (po, res)      -> let (name, res') = span isAlphaNum (po ++ res)
+                                           in cont (TName name) res'  
 
 parseMac s = parseM s 1
 

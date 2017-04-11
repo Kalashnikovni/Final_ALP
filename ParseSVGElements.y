@@ -11,6 +11,7 @@ import Data.List
 
 %name parseR Rect
 %name parsePo Polygon
+%name parsePl PolyLine 
 %name parsePa Path 
 
 %tokentype { Token }
@@ -19,25 +20,26 @@ import Data.List
 %lexer     { lexer } { TEof }
 
 %token
-    m      { Tm         }       
-    M      { TM         }
-    h      { Th         }       
-    H      { TH         }       
-    v      { Tv         }
-    V      { TV         }
-    l      { Tl         }
-    L      { TL         }
-    Z      { TZ         }
-    '-'    { TMinus     }  
-    ','    { TComma     }  
-    FLOAT  { TFloat $$  }
-    NAME   { TName $$   }
-    SCALE  { TScale     }
-    SKEWX  { TSkewX     }
-    SKEWY  { TSkewY     }
-    MATRIX { TMatrix    }
+    m         { Tm         }       
+    M         { TM         }
+    h         { Th         }       
+    H         { TH         }       
+    v         { Tv         }
+    V         { TV         }
+    l         { Tl         }
+    L         { TL         }
+    Z         { TZ         }
+    '-'       { TMinus     }  
+    ','       { TComma     }  
+    FLOAT     { TFloat $$  }
+    NAME      { TName $$   }
+    SCALE     { TScale     }
+    SKEWX     { TSkewX     }
+    SKEWY     { TSkewY     }
+    MATRIX    { TMatrix    }
     TRANSLATE { TTranslate }
     ROTATE    { TRotate    }
+    PL        { TPL        }
 
 %%
 
@@ -57,7 +59,7 @@ Sufix : TransformList Name { ($1, $2) }
 Name :      { "" }
      | NAME { $1 }
 
-SufixS : ScaleList Name { ($1, $2) }
+SufixS : RectList Name { ($1, $2) }
 
 Transform : TRANSLATE FloatExp                                                               { Thrash                     }
           | TRANSLATE Point                                                                  { Thrash                     }
@@ -70,14 +72,21 @@ Transform : TRANSLATE FloatExp                                                  
 TransformList :                         { []      }
               | Transform TransformList { $1 : $2 }
 
-ScaleList :                          { []            }
-          | SCALE FloatExp ScaleList { Scale $2 : $3 }
+RectList :                             { []            }
+         | TRANSLATE FloatExp RectList { $3            }
+         | TRANSLATE Point RectList    { $3            }
+         | ROTATE FloatExp RectList    { $3            }        
+         | SCALE FloatExp RectList     { Scale $2 : $3 }
 
 Rect  :: { Rect }
 Rect  : FloatExp FloatExp SufixS { Rect {h = $1, w = $2, tr = fst $3, nr = snd $3} }
 
 Polygon :: { SVGPolygon }
 Polygon : PointList Sufix { Pol {po = $1, tpo = fst $2, npo = snd $2} }
+
+PolyLine : PL PointList Sufix { % if head $2 == last $2 
+                                  then returnE Pol {po = $2, tpo = fst $3, npo = snd $3} 
+                                  else failE "Error de parseo: el polyline no es cerrado"}
 
 SPath :: { [PathCommand] }
 SPath : M Point PathL { M_abs $2 : $3 }
@@ -144,6 +153,7 @@ data Token
     | TMatrix
     | TTranslate
     | TRotate
+    | TPL
     | TEof
     deriving (Eq, Show)
 
@@ -192,14 +202,18 @@ lexString cont cs = case span isAlpha cs of
                         ("matrix", res)   -> cont TMatrix res
                         ("translate",res) -> cont TTranslate res
                         ("rotate", res)   -> cont TRotate res
+                        ("pl", res)       -> cont TPL res
                         (ran, res)        -> let (name, res') = span isAlphaNum (ran ++ res)
                                              in cont (TName name) res'
                 
 
 parseRect s    = parseR s 1
 
+parsePolygon s = parsePo s 1  
+
+parsePolyLine s = parsePl s 1
+
 parsePath s    = parsePa s 1  
 
-parsePolygon s = parsePo s 1  
 
 }
