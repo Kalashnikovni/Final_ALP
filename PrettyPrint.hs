@@ -23,6 +23,7 @@ printMyPointL' (p:mp) = text "(" <>
                         text "," <>
                         PJ.float (snd p) <>
                         text ")" <>
+                        text ", " <>
                         printMyPointL' mp 
 
 printPolygon :: Polygon -> Doc

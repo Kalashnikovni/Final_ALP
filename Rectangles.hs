@@ -287,9 +287,9 @@ r1 = C {p1x = 0, p1y = 0, p2x = 3, p2y = 3, rid = 1}
 r2 = C {p1x = 10, p1y = 0, p2x = 15, p2y = 7, rid = 2}
 r3 = C {p1x = 0, p1y = 0, p2x = 10, p2y = 5, rid = 3}
 r4 = C {p1x = 0, p1y = 5, p2x = 7, p2y = 14, rid = 4}
-c1 = C {p1x = 0, p1y = 0, p2x = 17, p2y = 20, rid = 0}
+c1 = C {p1x = 0, p1y = 0, p2x = 17, p2y = 20, nc = "c1", rid = 0}
 
-cc = C {p1x = 0, p1y = 0, p2x = 20, p2y = 20, rid = 0}
+cc = C {p1x = 0, p1y = 0, p2x = 20, p2y = 20, nc = "cc", rid = 0}
 a1 = C {p1x = 0, p1y = 0, p2x = 5, p2y = 16, rid = 1}
 a2 = C {p1x = 8, p1y = 0, p2x = 17, p2y = 14, rid = 2}
 a3 = C {p1x = 5, p1y = 0, p2x = 8, p2y = 3, rid = 3}

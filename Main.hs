@@ -8,7 +8,7 @@ import Eval
 import Parse
 import Parse_SVG
 import ParseSVGElements as PSE
-import PrettyPrint
+import PrettyPrint as PP
 import Rectangles
 
 -- Módulos prestados 
@@ -29,6 +29,7 @@ import GHC.Generics (Generic)
 import Graphics.Gloss
 import Graphics.SVG.ReadPath
 
+import Text.PrettyPrint.HughesPJ as PJ (render)
 import Text.XmlHtml as XML
 
 import System.IO as SIO
@@ -46,6 +47,7 @@ type HashTable k v = H.CuckooHashTable k v
 
 data Search  = R -- Rectangle
                | Po -- Polygon
+               | Pl -- Polyline
                | Pa -- Path
                | All -- Everything 
             deriving Show 
@@ -84,6 +86,7 @@ printHelp = do SIO.putStrLn "\nLista de comandos:"
                SIO.putStrLn ":l f         -> Cargar el archivo f"
                SIO.putStrLn ":lc f        -> Cargar los rectángulos definidos en el archivo SVG f"
                SIO.putStrLn ":lpo f       -> Cargar los polígonos definidos en el archivo SVG f"
+               SIO.putStrLn ":lpl f       -> Cargar los polylines definidos en el archivo SVG f"
                SIO.putStrLn ":lpa f       -> Cargar los paths definidos en el archivo SVG f"
                SIO.putStrLn ":la f        -> Cargar los rectángulos, polígonos y paths definidos en el archivo SVG f"
                SIO.putStrLn ":dp c        -> Definir el rectángulo c desde el intérprete"
@@ -127,6 +130,7 @@ parseCommands str s
                     ":l"   -> parseFiles t s
                     ":lc"  -> parseSVGFiles t s R
                     ":lpo" -> parseSVGFiles t s Po
+                    ":lpl" -> parseSVGFiles t s Pl
                     ":lpa" -> parseSVGFiles t s Pa
                     ":la"  -> parseSVGFiles t s All
                     ":dp"  -> case parseDefs t' 1 of
@@ -162,7 +166,7 @@ checkCons :: Containers -> State -> IO State
 checkCons cs s = if L.null n
                  then res
                  else do SIO.putStrLn "Los siguientes contenedores no son válidos: "
-                         print n -- PRETTYPRINTER
+                         SIO.putStrLn $ PJ.render (printContainers n) -- PRETTYPRINTER
                          res
     where (j, n) = sepJN cs checkCon 
           res    = return (s {sc = insertC (sc s) (nuc s) j, nuc = L.length j + nuc s + 1})
@@ -181,7 +185,7 @@ checkPolygons ps s = catch (checkPols ps s checkPol)
 checkPols ps s f = if L.null n
                    then res 
                    else do SIO.putStrLn "Los siguientes polígonos no son válidos: "
-                           print n -- PRETTYPRINTER
+                           SIO.putStrLn $ PJ.render (printPolygons n) -- PRETTYPRINTER
                            res 
     where (j, n) = sepJN ps f 
           res    = return (s {sp = sp s ++ j})
@@ -253,14 +257,21 @@ parseSVGFile f s t = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
                                 case parseXML "" str of
                                      Left st -> do SIO.putStrLn $ f ++ st
                                                    return s
-                                     Right d -> let dcon = docContent d
-                                                in case t of
-                                                    R   -> parse (L.map T.unpack (getElements dcon lookR "rect")) s t
-                                                    Po  -> parse (L.map T.unpack (getElements dcon lookP "polygon")) s t
-                                                    Pa  -> parse (L.map T.unpack (getElements dcon lookD "path")) s t
-                                                    All -> do s'  <- parse (L.map T.unpack (getElements dcon lookR "rect")) s R
-                                                              s'' <- parse (L.map T.unpack (getElements dcon lookP "polygon")) s' Po
-                                                              parse (L.map T.unpack (getElements dcon lookD "path")) s'' Pa
+                                     Right d -> 
+                                        let dcon = docContent d
+                                            r    = L.map T.unpack (getElements dcon lookR "rect")
+                                            po   = L.map T.unpack (getElements dcon lookP "polygon")
+                                            pl   = L.map T.unpack (L.map (T.append "pl ") (getElements dcon lookP "polyline")) 
+                                            pa   = L.map T.unpack (getElements dcon lookD "path")
+                                        in case t of
+                                            R   -> parse r s t
+                                            Po  -> parse po s t
+                                            Pl  -> parse pl s t
+                                            Pa  -> parse pa s t
+                                            All -> do s'   <- parse r s R
+                                                      s''  <- parse po s' Po
+                                                      s''' <- parse pl s'' Pl
+                                                      parse pa s''' Pa
                         else do SIO.putStrLn "*** Error: no es un archivo SVG"
                                 return s
 
@@ -271,19 +282,29 @@ parse (x:xs) s t = case t of
                                 do s' <- checkCons [evalRect v] s
                                    parse xs s' t
                             PSE.Failed str ->
-                                parse xs s t                                         
+                                do SIO.putStrLn str
+                                   parse xs s t                                         
                     Po -> case parsePolygon x of
                             PSE.Ok v       ->
                                 do s' <- checkPolygons [evalSVGPol v (k s)] s 
                                    parse xs s' t
                             PSE.Failed str ->
-                                parse xs s t                                                              
+                                do SIO.putStrLn str
+                                   parse xs s t                                                              
+                    Pl -> case parsePolyLine x of
+                            PSE.Ok v       ->
+                                do s' <- checkPolygons [evalSVGPol v (k s)] s 
+                                   parse xs s' t
+                            PSE.Failed str ->
+                                do SIO.putStrLn str
+                                   parse xs s t                                                              
                     Pa -> case parsePath x of                                        
                             PSE.Ok v       ->
                                 do s' <- checkPolygons [evalPath v (k s)] s
                                    parse xs s' t
                             PSE.Failed str ->
-                                parse xs s t                                         
+                                do SIO.putStrLn str
+                                   parse xs s t                                         
 
 
 parseFiles :: [String] -> State -> IO State
