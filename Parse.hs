@@ -658,7 +658,10 @@ lexNum cont cs = if null res
                  then fromInt 
                  else if fres == '.' 
                       then let (float, res') = span isDigit (drop 1 res) 
-                           in cont (TFloat ((read int :: Float) + ((read float :: Float) / (fromIntegral (10 ^ length float) :: Float)))) res'  
+                           in case float of
+                                [] -> cont TEof []
+                                _  -> cont (TFloat ((read int :: Float) + ((read float :: Float) 
+                                            / (fromIntegral (10 ^ length float) :: Float)))) res'  
                       else fromInt 
     where (int, res) = span isDigit cs  
           fres       = head res
@@ -682,12 +685,6 @@ lexString cont (c:cs) = case span isAlpha (c:cs) of
                                                         else cont TEof [] 
                                            else let (name, res') = span isAlphaNum (po ++ res)
                                                 in cont (TName name) res'  
-
-lexNat cont [] = cont TEof []
-lexNat cont (c:cs)
-    | isSpace c = lexNat cont cs
-    | isDigit c = let (num, res) = span isDigit (c:cs)
-                  in cont (TNat (read num :: Int)) res 
 
 parseMac s = parseM s 1
 

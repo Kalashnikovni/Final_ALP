@@ -10,7 +10,8 @@ import Data.Geometry.Point
 import Data.Geometry.LineSegment
 import Data.Ext
 
-import Algorithms.Geometry.LineSegmentIntersection.BentleyOttmann as BO 
+import qualified Algorithms.Geometry.LineSegmentIntersection.BentleyOttmann as BO (intersections) 
+import qualified Algorithms.Geometry.LineSegmentIntersection.Naive as N (intersections)
 
 import Graphics.Gloss.Geometry.Line
 import Graphics.Gloss.Data.Vector 
@@ -51,7 +52,7 @@ isPolygon _          = False
 addKerf :: Float -> Polygon -> Polygon
 addKerf o po
     | length l < 3 = po
-    | otherwise    = newPoints (l ++ [head l]) 
+    | otherwise    = (newPoints (l ++ [head l])) {pn = pn po}  
     where ppo = p po
           l   = linearize o (ppo ++ [head ppo]) ppo 
 
@@ -144,13 +145,13 @@ applyT1 p (SkewY s)                  = applyT1 p (Matrix 1 (tan (s * pi / 180)) 
 applyT1 p (Matrix m1 m2 m3 m4 m5 m6) = (fst p * m1 + snd p * m3 + m5, fst p * m2 + snd p * m4 + m6)
 applyT1 p Thrash                     = p
 
-evalSVGPol :: SVGPolygon -> Polygon
-evalSVGPol pol
-    | null (tpo pol) = P {p = po pol, pn = npo pol}
-    | otherwise      = evalSVGPol (pol {po = map (\x -> applyT1 x (head (tpo pol))) (po pol), tpo = tail (tpo pol)})
+evalSVGPol :: SVGPolygon -> Float -> Polygon
+evalSVGPol pol k
+    | null (tpo pol) = addKerf k (P {p = po pol, pn = npo pol})
+    | otherwise      = evalSVGPol (pol {po = map (\x -> applyT1 x (head (tpo pol))) (po pol), tpo = tail (tpo pol)}) k
 
-evalPath :: Path -> Polygon
-evalPath path = evalSVGPol (Pol {po = evalPathC (pa path) (0,0) True, tpo = tpa path, npo = npa path})
+evalPath :: Path -> Float -> Polygon
+evalPath path k = evalSVGPol (Pol {po = evalPathC (pa path) (0,0) True, tpo = tpa path, npo = npa path}) k
 
 -- El bool es True si el comando es absoluto, y False en caso contrario
 evalPathC :: [PathCommand] -> MyPoint -> Bool -> [MyPoint]
@@ -175,6 +176,12 @@ evalPathC (Z : _) _ _            = []
 -- De alguna forma es un "type checker" --
 ------------------------------------------
 
+checkCon :: Container -> Maybe Container
+checkCon c 
+    | p1x c == p2x c = Nothing
+    | p1y c == p2y c = Nothing
+    | otherwise      = Just c
+
 checkPol :: Polygon -> Maybe Polygon 
 checkPol p = if check3sides p
              then if checkIntersections p 
@@ -182,12 +189,40 @@ checkPol p = if check3sides p
                   else Just p 
              else Nothing
 
+checkPolSlow :: Polygon -> Maybe Polygon 
+checkPolSlow p = if check3sides p
+                 then if checkIntersectionsSlow p 
+                      then Nothing
+                      else Just p 
+                 else Nothing
+
 check3sides :: Polygon -> Bool
 check3sides po = length (p po) >= 3
 
 --checkIntersections :: Polygon -> [LineSegment 2 () Float]
-checkIntersections po = length (intersections (toLSegments (pol ++ [head pol]))) /= length pol
+checkIntersections po = length (BO.intersections (toLSegments (pol ++ [head pol]))) /= length pol
     where pol = p po
+
+checkIntersectionsSlow :: Polygon -> Bool
+checkIntersectionsSlow po = cIS (getSegs (p po ++ [head (p po)])) 
+
+cIS :: [(MyPoint, MyPoint)] -> Bool
+cIS []     = False
+cIS (x:xs) = if Eval.compare x xs 
+             then True
+             else cIS xs
+
+compare :: (MyPoint, MyPoint) -> [(MyPoint, MyPoint)] -> Bool
+compare x []     = False
+compare x (y:ys) = case intersectSegSeg (fst x) (snd x) (fst y) (snd y) of
+                    Just v -> if abs (fst v - fst (snd x)) <= 0.001 && abs (snd v - snd (snd x)) <= 0.001 
+                              then False
+                              else True
+                    _      -> False
+
+getSegs :: [MyPoint] -> [(MyPoint, MyPoint)]
+getSegs [x]        = []
+getSegs (x:(y:ys)) = (x,y) : (getSegs (y:ys))
 
 toLSegments [x]        = [] 
 toLSegments (x:(y:ys)) = (ClosedLineSegment (point2 (fst x) (snd x) :+ ()) (point2 (fst y) (snd y) :+ ())) : (toLSegments (y:ys))
