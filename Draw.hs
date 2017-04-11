@@ -7,6 +7,7 @@ import Data.Text
 import Text.Blaze.Internal as I
 import Text.Blaze.Svg11 as S
 import Text.Blaze.Svg11.Attributes as A
+import Text.Blaze.Svg.Renderer.Pretty
 
 import Graphics.Gloss
 
@@ -26,8 +27,9 @@ margin = 10
 
 margin2 = margin / 2
 
-draw :: Container -> Polygons -> S.Svg
-draw c ps = S.docTypeSvg ! 
+draw :: Container -> [[MyPoint]] -> String
+draw c ps = renderSvg $
+            S.docTypeSvg ! 
             A.version "1.1" ! 
             A.width (textValue (pack (show (p2x c - p1x c + margin)))) ! 
             A.height (textValue (pack (show (p2y c - p1y c + margin)))) $ 
@@ -45,12 +47,12 @@ drawContainer c = S.path !
                                   l (p1x c + margin2) (p2y c + margin2)
                                   S.z))
 
-makePath :: Polygon -> S.Path
+makePath :: [MyPoint] -> S.Path
 makePath []     = S.z
 makePath (p:ps) = do l (fst p + margin2) (snd p + margin2)  
                      makePath ps
 
-makePaths :: Polygons -> S.Svg
+makePaths :: [[MyPoint]] -> S.Svg
 makePaths []     = S.string ""
 makePaths (p:ps) = do (S.path ! 
                        A.fill "none" !
