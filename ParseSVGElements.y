@@ -56,8 +56,8 @@ PointList :                 { []      }
 
 Sufix : TransformList Name { ($1, $2) }
 
-Name :      { "" }
-     | NAME { $1 }
+Name :      { "noname" }
+     | NAME { $1       }
 
 SufixS : RectList Name { ($1, $2) }
 

@@ -10,6 +10,7 @@ import Data.List
 }
 
 %name parseF FloatExp
+%name parseC Container
 %name parseDef DefExp
 %name parseDefs Defs
 %name parseM Machine
@@ -165,5 +166,7 @@ lexString cont (c:cs) = case span isAlpha (c:cs) of
 parseMac s = parseM s 1
 
 parseFloat s = parseF s 1
+
+parseCon s = parseC s 1 
 
 }

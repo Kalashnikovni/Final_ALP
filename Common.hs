@@ -18,7 +18,10 @@ data Container  = C {p1x :: Float,
                      p2x :: Float,
                      p2y :: Float,
                      nc  :: String,
-                     rid :: Int} deriving (Eq, Show) 
+                     rid :: Int} deriving (Eq, Show)
+
+instance Ord Container where
+    x <= y = rid x <= rid y
                  
 type Containers = [Container]
 

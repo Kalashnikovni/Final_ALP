@@ -570,7 +570,7 @@ happyReduction_10 _ _  = notHappyAtAll
 
 happyReduce_11 = happySpecReduce_0  11 happyReduction_11
 happyReduction_11  =  HappyAbsSyn11
-		 (""
+		 ("noname"
 	)
 
 happyReduce_12 = happySpecReduce_1  11 happyReduction_12
@@ -729,7 +729,7 @@ happyReduction_30 ((HappyAbsSyn10  happy_var_3) `HappyStk`
 	happyRest) tk
 	 = happyThen (( if head happy_var_2 == last happy_var_2 
                                   then returnE Pol {po = happy_var_2, tpo = fst happy_var_3, npo = snd happy_var_3} 
-                                  else failE "El polyline no es cerrado")
+                                  else failE "Error de parseo: el polyline no es cerrado")
 	) (\r -> happyReturn (HappyAbsSyn18 r))
 
 happyReduce_31 = happySpecReduce_3  19 happyReduction_31

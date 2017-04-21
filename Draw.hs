@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Draw where
 
 import Common
@@ -8,8 +10,6 @@ import Text.Blaze.Internal as I
 import Text.Blaze.Svg11 as S
 import Text.Blaze.Svg11.Attributes as A
 import Text.Blaze.Svg.Renderer.Pretty
-
-import Graphics.Gloss
 
 {-r_to_path :: Rectangle -> Picture
 r_to_path r = line [(x1, y1), (x1, y2), (x2, y2), (x2, y1), (x1, y1)]
@@ -31,6 +31,7 @@ draw :: Container -> [[MyPoint]] -> String
 draw c ps = renderSvg $
             S.docTypeSvg ! 
             A.version "1.1" ! 
+            A.fill "white" !
             A.width (textValue (pack (show (p2x c - p1x c + margin)))) ! 
             A.height (textValue (pack (show (p2y c - p1y c + margin)))) $ 
             do drawContainer c
@@ -38,7 +39,7 @@ draw c ps = renderSvg $
 
 drawContainer :: Container -> S.Svg
 drawContainer c = S.path ! 
-                  A.fill "none" !
+                  A.fill "white" !
                   A.stroke "black" !
                   A.strokeWidth "1" !
                   A.d (mkPath (do m (p1x c + margin2) (p1y c + margin2)

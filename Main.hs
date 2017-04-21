@@ -1,13 +1,15 @@
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
 -- Módulos propios
 import Common
+import Draw
 import Eval
 import Parse
 import Parse_SVG
 import ParseSVGElements as PSE
+import Polygons as Pol --(embedPols, takeOut, rotate, getRotateds, getContainers)
 import PrettyPrint as PP
 import Rectangles
 
@@ -15,21 +17,17 @@ import Rectangles
 import Control.Exception
 import Control.Monad.ST
 
-import Data.ByteString as BS
-import Data.Hashable
-import qualified Data.HashTable.ST.Cuckoo as C
-import qualified Data.HashTable.IO as H
+import Data.ByteString as BS (readFile)
+import Data.Char (isSpace)
 import Data.List as L
 import Data.Maybe (fromJust, isJust, isNothing)
+import Data.Set as Set
 import Data.String as S
-import Data.Text as T
-import Data.STRef
+import Data.Text as T (unpack, append)
 
-import GHC.Generics (Generic)
-import Graphics.Gloss
 import Graphics.SVG.ReadPath
 
-import Text.PrettyPrint.HughesPJ as PJ (render)
+import Text.PrettyPrint.HughesPJ as PJ (render, float)
 import Text.XmlHtml as XML
 
 import System.IO as SIO
@@ -41,9 +39,20 @@ import System.Directory (doesFileExist)
 -- Data definitions --
 ----------------------
 
-type HashTable k v = H.CuckooHashTable k v
-
---bla = newSTReif
+data Command = Help
+             | Browse
+             | Clear
+             | SetK String
+             | Load String
+             | LoadC String
+             | LoadPo String
+             | LoadLines String
+             | LoadPa String
+             | LoadAll String
+             | DefC String
+             | DefP String
+             | Draw String
+             | Noop
 
 data Search  = R -- Rectangle
                | Po -- Polygon
@@ -52,50 +61,20 @@ data Search  = R -- Rectangle
                | All -- Everything 
             deriving Show 
 
-data State   = S { k :: Float, nuc :: Int, sc :: IO (HashTable Key Container), sp :: Polygons } --deriving Show
-
-data Key     = K MyPoint Int deriving (Generic, Show)
-
-instance Eq Key where
-    K p1 id1 == K p2 id2 = p1 == p2
-
-instance Hashable Key where
-    hash (K p id) = floor (fst p * snd p)
+data State   = S { k :: Float, nuc :: Int, sc :: Set Container, sp :: Polygons } --deriving Show
 
 -- Code --
 ----------
 
---main :: IO ()
---main = print "Main"
-
 main :: IO ()
 main = do printHello
           args <- getArgs
-          readEvalPrintLoop args (S {k = 0, nuc = 0, sc = H.new, sp = []})
+          readEvalPrintLoop args (S {k = 0, nuc = 0, sc = Set.empty, sp = []})
 
 printHello :: IO ()
 printHello = do SIO.putStrLn "\n*** Intérprete de polígonos ***" 
                 SIO.putStrLn ":? para desplegar ayuda\n"
-
-printHelp :: IO ()
-printHelp = do SIO.putStrLn "\nLista de comandos:"
-               SIO.putStrLn ":?           -> Ayuda"
-               SIO.putStrLn ":b           -> Imprimir las definiciones actuales"
-               SIO.putStrLn ":c           -> Borrar todas las definiciones realizadas (tanto de archivos como en el intérprete)"
-               SIO.putStrLn ":sk v        -> Fijar el valor del kerf en v"
-               SIO.putStrLn ":l f         -> Cargar el archivo f"
-               SIO.putStrLn ":lc f        -> Cargar los rectángulos definidos en el archivo SVG f"
-               SIO.putStrLn ":lpo f       -> Cargar los polígonos definidos en el archivo SVG f"
-               SIO.putStrLn ":lpl f       -> Cargar los polylines definidos en el archivo SVG f"
-               SIO.putStrLn ":lpa f       -> Cargar los paths definidos en el archivo SVG f"
-               SIO.putStrLn ":la f        -> Cargar los rectángulos, polígonos y paths definidos en el archivo SVG f"
-               SIO.putStrLn ":dp c        -> Definir el rectángulo c desde el intérprete"
-               SIO.putStrLn ":dp p        -> Definir el polígono p desde el intérprete"
-               SIO.putStrLn $ ":d c m t p s -> Ejecutar el algoritmo con todos los elementos cargados (c: contenedor seleccionado" ++ 
-                              "\n                m: cardinal del conjunto poblacional, t: cantidad de iteraciones, p : probilidad de" ++
-                              "\n                rotación, s: nombre del archivo de destino)"
-               
-
+ 
 readEvalPrintLoop :: [String] -> State -> IO ()
 readEvalPrintLoop args s = 
     do maybeLine <- readline ">> "
@@ -103,116 +82,118 @@ readEvalPrintLoop args s =
            Nothing   -> return ()
            Just ":q" -> return ()
            Just line -> do addHistory line                             
-                           s' <- parseCommands line s
-                           c  <- sc s'
-                           l  <- H.toList c
-                           SIO.putStrLn ""
-                           print l
-                           print (sp s')
-                           SIO.putStrLn ""
+                           c  <- interpretCommand line
+                           s' <- handleCommand c s
                            readEvalPrintLoop args s'
 
-parseCommands :: String -> State -> IO State
-parseCommands str s
-    | L.null w  = return s
-    | otherwise = case L.head w of
-                    ":?"   -> do printHelp
-                                 return s
-                    ":b"   -> do print (sp s)
-                                 return s
-                    ":c"   -> return (s {k = 0, nuc = 0, sc = H.new, sp = []})
-                    ":sk"  -> case parseFloat t' of
-                                Parse.Ok v       -> 
-                                    checkKerf v s
-                                Parse.Failed str -> 
-                                    do SIO.putStrLn str
-                                       return s
-                    ":l"   -> parseFiles t s
-                    ":lc"  -> parseSVGFiles t s R
-                    ":lpo" -> parseSVGFiles t s Po
-                    ":lpl" -> parseSVGFiles t s Pl
-                    ":lpa" -> parseSVGFiles t s Pa
-                    ":la"  -> parseSVGFiles t s All
-                    ":dp"  -> case parseDefs t' 1 of
-                                Parse.Ok v       -> 
-                                    checkPolygons (L.map evalDefP v) s
-                                Parse.Failed str -> 
-                                    do SIO.putStrLn str
-                                       return s
-                    ":dc"  -> case parseDefs t' 1 of
-                                Parse.Ok v       -> 
-                                    checkCons (L.map evalDefC v) s
-                                Parse.Failed str -> 
-                                    do SIO.putStrLn str
-                                       return s
-                    ":d"   -> do evalState s t 
-                                 return s
-                    _      -> do SIO.putStrLn "Comando desconocido, por favor reintente"
-                                 return s
-    where w  = L.words str
-          t  = L.tail w
-          t' = S.unwords t
+data InteractiveCommand = Cmd [String] String (String -> Command) String  
 
--- Chequeo de tipos --
-----------------------
+commands :: [InteractiveCommand]
+commands = 
+    [Cmd [":help", ":?"] "" (const Help) "-> Ayuda",
+     Cmd [":browse", ":b"] "" (const Browse) "-> Imprimir las definiciones actuales",
+     Cmd [":clear", ":c"] "" (const Clear) "-> Borrar todas las definiciones realizadas (tanto de archivos como en el intérprete)",
+     Cmd [":setkerf", ":sk"] "<float>" SetK "-> Fijar el valor del kerf a <float>",
+     Cmd [":load",":l"] "<file>" Load "-> Cargar el archivo <file>",
+     Cmd [":loadcontainers", ":lc"] "<file>" LoadC "-> Cargar los rectángulos definidos en el archivo SVG <file>",
+     Cmd [":loadpolygons", ":lpo"] "<file>" LoadPo "-> Cargar los polígonos definidos en el archivo SVG <file>",
+     Cmd [":loadpolylines",":lpl"] "<file>" LoadLines "-> Cargar los polylines definidos en el archivo SVG <file>",
+     Cmd [":loadpaths",":lpa"] "<file>" LoadPa "-> Cargar los paths definidos en el archivo SVG <file>",
+     Cmd [":loadall", ":la"] "<file>" LoadAll "-> Cargar los rectángulos, polígonos y paths definidos en el archivo SVG <file>",
+     Cmd [":defc", ":dc"] "<expr>" DefC "-> Definir el rectángulo <expr> desde el intérprete",
+     Cmd [":defp ", "dp"] "<expr>" DefP "-> Definir el polígono <expr> desde el intérprete",
+     Cmd [":draw", ":d"] "<c> <m> <t> <p> <s>" Draw 
+                         ("-> Ejecutar el algoritmo con todos los elementos cargados (c: contenedor seleccionado" ++ 
+                          "\n                m: cardinal del conjunto poblacional, t: cantidad de iteraciones, p : probilidad de" ++
+                          "\n                rotación, s: nombre del archivo de destino)")]
 
-checkKerf :: Float -> State -> IO State
-checkKerf v s = if v >= 0
-                then return (s {k = v})
-                else do SIO.putStrLn "El valor del kerf debe ser mayor o igual a 0"
-                        return s
 
-checkCons :: Containers -> State -> IO State
-checkCons cs s = if L.null n
-                 then res
-                 else do SIO.putStrLn "Los siguientes contenedores no son válidos: "
-                         SIO.putStrLn $ PJ.render (printContainers n) -- PRETTYPRINTER
-                         res
-    where (j, n) = sepJN cs checkCon 
-          res    = return (s {sc = insertC (sc s) (nuc s) j, nuc = L.length j + nuc s + 1})
+interpretCommand :: String -> IO Command
+interpretCommand s = if isPrefixOf ":" s 
+                     then do let (cmd, t) = break isSpace s
+                                 t'       = dropWhile isSpace t
+                             let matching = L.filter (\(Cmd cs _ _ _) -> any (cmd ==) cs) commands
+                             case matching of
+                                [] -> 
+                                    do putStrLn ("Comando desconocido, por favor reintente") 
+                                       return Noop
+                                [Cmd _ _ f _] ->
+                                    return (f t')
+                                _ -> do putStrLn ("Comando ambiguo")
+                                        return Noop
+                     else return Noop
 
-insertC :: IO (HashTable Key Container) -> Int -> Containers -> IO (HashTable Key Container)
-insertC ht _ []     = ht
-insertC ht n (c:cs) = do ht' <- ht
-                         H.insert ht' (K (width_r c, height_r c) n) (c {rid = n})
-                         insertC (return ht') (n + 1) cs
-                         return ht' 
+handleCommand :: Command -> State -> IO State
+handleCommand cmd s = 
+    case cmd of
+        Help        -> do printHelp
+                          return s
+        Browse      -> do printEnv
+                          return s
+        Clear       -> return (s {k = 0, sc = Set.empty, nuc = 0, sp = []})  
+        SetK k      -> case parseFloat k of
+                        Parse.Ok v       -> 
+                            checkKerf v s
+                        Parse.Failed str -> 
+                            do putStrLn str
+                               return s
+        Load f      -> parseFiles (words f) s
+        LoadC f     -> parseSVGFiles (words f) s R
+        LoadPo f    -> parseSVGFiles (words f) s Po
+        LoadLines f -> parseSVGFiles (words f) s Pl
+        LoadPa f    -> parseSVGFiles (words f) s Pa
+        LoadAll f   -> parseSVGFiles (words f) s All
+        DefP e      -> case parseDefs e 1 of
+                        Parse.Ok v       -> 
+                            checkPolygons (L.map evalDefP v) s
+                        Parse.Failed str -> 
+                            do SIO.putStrLn str
+                               return s
+        DefC e      -> case parseDefs e 1 of
+                        Parse.Ok v       -> 
+                            checkCons (L.map evalDefC v) s
+                        Parse.Failed str -> 
+                            do SIO.putStrLn str
+                               return s
+        Draw a      -> do evalState (words a) s 
+                          return s
 
-checkPolygons ps s = catch (checkPols ps s checkPol)
-                           (\e -> do let err = show (e :: ErrorCall)
-                                     checkPols ps s checkPolSlow)
+printHelp :: IO ()
+printHelp = putStrLn "Help!"
 
-checkPols ps s f = if L.null n
-                   then res 
-                   else do SIO.putStrLn "Los siguientes polígonos no son válidos: "
-                           SIO.putStrLn $ PJ.render (printPolygons n) -- PRETTYPRINTER
-                           res 
-    where (j, n) = sepJN ps f 
-          res    = return (s {sp = sp s ++ j})
-
--- El lado izquierdo son los polígonos legales
-sepJN :: [a] -> (a -> Maybe a) -> ([a], [a])
-sepJN []     f = ([], [])
-sepJN (x:xs) f = case f x of
-                    Just v  -> (v : (fst s'), snd s') 
-                    Nothing -> (fst s', x : (snd s'))
-    where s' = sepJN xs f
+printEnv :: IO ()
+printEnv = putStrLn "Env!"
 
 -- Comando :d --
 ----------------                
  
-evalState :: State -> [String] -> IO ()  
-evalState s str = do a <- parseArgs str
+evalState :: [String] -> State -> IO ()  
+evalState str s = do a <- parseArgs str
                      case a of 
-                        Just (c, m, t, p, s) -> 
+                        Just (c, m, t, p, str') -> 
+                            do let eP  = embedPols (sp s)
+                               let con = findMin (Set.filter (\x -> rid x == c) (sc s))
+                               let res = geneticAlgorithm eP con m t p 
+                               case res of
+                                Just v  ->
+                                    do r <- getRotateds v eP
+                                       SIO.writeFile str' (draw con (L.map fromC v))
+                                       return ()
+                                Nothing ->
+                                    do SIO.putStrLn "Noup!"
+                                       print con
+                                       return ()
+                        _                    -> 
                             return ()
-                        _                    -> return ()
 
+--BORRAR
+fromC :: Container -> [MyPoint]
+fromC c = [(p1x c, p1y c), (p2x c, p1y c), (p2x c, p2y c), (p1x c, p2y c)]
 
 parseArgs :: [String] -> IO (Maybe (Int, Int, Int, Float, String))
 parseArgs [c, m, t, p, s] = 
     case reads c :: [(Int, String)] of
-        [(n, "")] -> 
+        [(c, "")] -> 
             case reads m :: [(Int, String)] of
                 [(n1, "")] -> 
                     case reads t :: [(Int, String)] of
@@ -224,13 +205,15 @@ parseArgs [c, m, t, p, s] =
                                                          case b of
                                                             True  -> do SIO.putStrLn "\nArchivo existente, elija otro nombre\n"
                                                                         return Nothing
-                                                            False -> return (Just (n, n1, n2, v, st))
+                                                            False -> if n1 < 1 || n2 < 1 || v < 0 || v > 1
+                                                                     then printiarg
+                                                                     else return (Just (c, n1, n2, v, st))
                                 Parse.Failed str -> do SIO.putStrLn str
                                                        return Nothing
                         _                  -> printiarg 
                 _                   -> printiarg
         _                 -> printiarg
-parseArgs _ = printiarg
+parseArgs _ = printiarg 
 
 printiarg :: IO (Maybe a)
 printiarg = do SIO.putStrLn invalidarg
@@ -248,14 +231,14 @@ parseSVGFiles (f:fs) s t = do s' <- parseSVGFile f s t
 
 -- El tercer argumento es para saber qué clase de elementos se busca dentro del archivo SVG
 parseSVGFile :: String -> State -> Search -> IO State
-parseSVGFile f s t = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
+parseSVGFile f s t = do putStrLn $ "Abriendo " ++ f ++ "..."
                         if L.isSuffixOf ".svg" f
                         then do str <- catch (BS.readFile f)
                                        (\e -> do let err = show (e :: IOException)
                                                  SIO.hPutStr stderr ("*** Error: no se pudo abrir" ++ err ++ "\n")
                                                  return "")
                                 case parseXML "" str of
-                                     Left st -> do SIO.putStrLn $ f ++ st
+                                     Left st -> do putStrLn $ f ++ st
                                                    return s
                                      Right d -> 
                                         let dcon = docContent d
@@ -272,7 +255,7 @@ parseSVGFile f s t = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
                                                       s''  <- parse po s' Po
                                                       s''' <- parse pl s'' Pl
                                                       parse pa s''' Pa
-                        else do SIO.putStrLn "*** Error: no es un archivo SVG"
+                        else do putStrLn "*** Error: no es un archivo SVG"
                                 return s
 
 parse []     s t = return s
@@ -313,17 +296,19 @@ parseFiles (f:fs) s = do s' <- parseFile f s
                          parseFiles fs s'  
 
 parseFile :: String -> State -> IO State
-parseFile f s = do SIO.putStrLn $ "Abriendo " ++ f ++ "..."
+parseFile f s = do putStrLn $ "Abriendo " ++ f ++ "..."
                    str <- catch (SIO.readFile f)
                                 (\e -> do let err = show (e :: IOException)
-                                          SIO.hPutStr stderr ("*** Error: no se pudo abrir " ++ err ++ "\n")
+                                          hPutStr stderr ("*** Error: no se pudo abrir " ++ err ++ "\n")
                                           return "")  
-                   case parseMac str of
-                        Parse.Failed st -> do SIO.putStrLn $ f ++ ": " ++ st
-                                              return s 
-                        Parse.Ok v      -> do s1 <- checkKerf (getKerf v) s
-                                              s2 <- checkCons (fst (evalMac v)) s1
-                                              checkPolygons (snd (evalMac v)) s2 
+                   if str == ""
+                   then return s
+                   else case parseMac str of
+                            Parse.Failed st -> do putStrLn $ f ++ ": " ++ st
+                                                  return s 
+                            Parse.Ok v      -> do s1 <- checkKerf (getKerf v) s
+                                                  s2 <- checkCons (fst (evalMac v)) s1
+                                                  checkPolygons (snd (evalMac v)) s2 
 
 getDefs :: Machine -> [Def]
 getDefs (Kerf _ ds) = ds
@@ -333,3 +318,45 @@ getKerf (Kerf k _) = k
 
 setKerf :: Machine -> Float -> Machine
 setKerf (Kerf _ ds) k = Kerf k ds  
+
+-- Chequeo de tipos --
+----------------------
+
+checkKerf :: Float -> State -> IO State
+checkKerf v s = if v >= 0
+                then return (s {k = v})
+                else do putStrLn "El valor del kerf debe ser mayor o igual a 0"
+                        return s
+
+checkCons :: Containers -> State -> IO State
+checkCons cs s = if L.null n
+                 then res
+                 else do putStrLn "Los siguientes contenedores no son válidos: "
+                         putStrLn $ PJ.render (printContainers n) 
+                         res
+    where (j, n) = sepJN cs checkCon 
+          res    = return (insertC j s)
+
+insertC :: Containers -> State -> State
+insertC [] s     = s  
+insertC (c:cs) s = insertC cs (s {sc = Set.insert (c {rid = nuc s}) (sc s), nuc = nuc s + 1}) 
+
+checkPolygons ps s = catch (checkPols ps s checkPol)
+                           (\e -> do let err = show (e :: ErrorCall)
+                                     checkPols ps s checkPolSlow)
+
+checkPols ps s f = if L.null n
+                   then res 
+                   else do putStrLn "Los siguientes polígonos no son válidos: "
+                           putStrLn $ PJ.render (printPolygons n) 
+                           res 
+    where (j, n) = sepJN ps f 
+          res    = return (s {sp = sp s ++ j})
+
+-- El lado izquierdo son los polígonos legales
+sepJN :: [a] -> (a -> Maybe a) -> ([a], [a])
+sepJN []     f = ([], [])
+sepJN (x:xs) f = case f x of
+                    Just v  -> (v : (fst s'), snd s') 
+                    Nothing -> (fst s', x : (snd s'))
+    where s' = sepJN xs f
