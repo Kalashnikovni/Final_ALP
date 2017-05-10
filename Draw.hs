@@ -50,16 +50,17 @@ drawContainer c = S.path !
 
 makePath :: [MyPoint] -> S.Path
 makePath []     = S.z
-makePath (p:ps) = do l (fst p + margin2) (snd p + margin2)  
+makePath (p:ps) = do l (fst p) (snd p)
                      makePath ps
 
 makePaths :: [[MyPoint]] -> S.Svg
 makePaths []     = S.string ""
 makePaths (p:ps) = do (S.path ! 
                        A.fill "none" !
+                       transform "translate (5,5)" !
                        A.stroke "black" ! 
                        A.strokeWidth "1" ! 
-                       A.d (mkPath (do m (fst (Prelude.head p) + margin2) (snd (Prelude.head p) + margin2)
+                       A.d (mkPath (do m (fst (Prelude.head p)) (snd (Prelude.head p))
                                        makePath (Prelude.tail p))))
                       makePaths ps 
 

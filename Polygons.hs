@@ -38,6 +38,7 @@ minRect po = C {p1x = 0,
                 p1y = 0,
                 p2x = fst (maximumBy byXPos points) - fst (minimumBy byXPos points),
                 p2y = snd (maximumBy byYPos points) - snd (minimumBy byYPos points),
+                rid = -10,
                 nc  = pn po}
     where points = p po
 
@@ -61,7 +62,7 @@ rotatePoints p r = map (\(x,y) -> (c * x - s * y, c * y + s * x)) p
     where c = cos r
           s = sin r
 
-rotate :: Containers -> Polygons -> Polygons
+{-rotate :: Containers -> Polygons -> Polygons
 rotate _ []       = []
 rotate cs (po:ps) = case c' of
                         Just v ->
@@ -69,7 +70,7 @@ rotate cs (po:ps) = case c' of
                         Nothing ->
                             []
     where c' = find (\x -> nc x == pn po) cs 
-
+-}
 
 -- Sacamos los rectángulos y ponemos los polígonos --
 -----------------------------------------------------
@@ -93,27 +94,20 @@ compareCons x (y:ys) = if isSame x y
 isSame :: Container -> Container -> Bool
 isSame c1 c2 = rid c1 == rid c2 && abs (widthR c1 - heightR c2) <= 0.001 && abs (heightR c1 - widthR c2) <= 0.001 
 
--- Todos los rectángulos
--- Rectángulos rotados
-takeOut :: Containers -> Polygons -> Polygons 
-takeOut _ []       = []
-takeOut cs (po:ps) = case c' of
-                        Just v  -> 
-                            (po {p = translatePoints (p po) (p1x v, p1y v)}) : (takeOut (delete v cs) ps) 
-                        Nothing -> 
-                            []
-    where c' = find (\x -> nc x == pn po) cs  
+centroid :: Polygon -> MyPoint
+centroid pol = ((1/(6 * a)) * sumCoord points fst, (1/(6 * a)) * sumCoord points snd) 
+    where points = p pol
+          a      = 1/2 * (area (points ++ [head points]))
 
-translatePoints :: [MyPoint] -> MyPoint -> [MyPoint]
-translatePoints p t = map (\(x,y) -> (x + fst t, y + snd t)) p
+area :: [MyPoint] -> Float
+area [p1, p2]       = fst p1 * snd p2 - fst p2 * snd p1
+area (x:(y:(z:zs))) = (fst x * snd y - fst y * snd x) + area (y:(z:zs))
 
--- Fucs. auxiliares --
-----------------------
+sumCoord :: [MyPoint] -> ((Float, Float) -> Float) -> Float
+sumCoord [p1, p2] f       = (f p1 + f p2) * (fst p1 * snd p2 - fst p2 * snd p1)
+sumCoord (x:(y:(z:zs))) f = (f x + f y) * (fst x * snd y - fst y * snd x) + sumCoord (y:(z:zs)) f
 
-getContainers :: Containers -> [Int] -> IO Containers
-getContainers _ []      = return []
-getContainers cs (x:xs) = case find (\y -> rid y == x) cs of
-                            Just v  -> do res <- getContainers cs xs
-                                          return (v : res) 
-                            Nothing -> getContainers cs xs 
-
+rotate90Centroid :: Polygon -> Polygon
+rotate90Centroid pol = pol {p = map (\(x,y) -> (x + cx, y + cy)) (rotatePoints (map (\(x,y) -> (x - cx, y - cy)) (p pol)) (pi / 2))}
+    where cx = fst (centroid pol)
+          cy = snd (centroid pol)

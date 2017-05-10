@@ -103,9 +103,9 @@ commands =
      Cmd [":defc", ":dc"] "<expr>" DefC "-> Definir el rectángulo <expr> desde el intérprete",
      Cmd [":defp ", "dp"] "<expr>" DefP "-> Definir el polígono <expr> desde el intérprete",
      Cmd [":draw", ":d"] "<c> <m> <t> <p> <s>" Draw 
-                         ("-> Ejecutar el algoritmo con todos los elementos cargados (c: contenedor seleccionado" ++ 
-                          "\n                m: cardinal del conjunto poblacional, t: cantidad de iteraciones, p : probilidad de" ++
-                          "\n                rotación, s: nombre del archivo de destino)")]
+                         ("-> Ejecutar el algoritmo con todos los elementos cargados (c: contenedor seleccionado, " ++ 
+                          "m: cardinal del conjunto poblacional, t: cantidad de iteraciones, p : probilidad de " ++
+                          "rotación, s: nombre del archivo de destino)")]
 
 
 interpretCommand :: String -> IO Command
@@ -115,20 +115,21 @@ interpretCommand s = if isPrefixOf ":" s
                              let matching = L.filter (\(Cmd cs _ _ _) -> any (cmd ==) cs) commands
                              case matching of
                                 [] -> 
-                                    do putStrLn ("Comando desconocido, por favor reintente") 
+                                    do putStrLn "Comando desconocido, por favor reintente" 
                                        return Noop
                                 [Cmd _ _ f _] ->
                                     return (f t')
                                 _ -> do putStrLn ("Comando ambiguo")
                                         return Noop
-                     else return Noop
+                     else do putStrLn "Comando desconocido, por favor reintente"
+                             return Noop
 
 handleCommand :: Command -> State -> IO State
 handleCommand cmd s = 
     case cmd of
         Help        -> do printHelp
                           return s
-        Browse      -> do printEnv
+        Browse      -> do printEnv s
                           return s
         Clear       -> return (s {k = 0, sc = Set.empty, nuc = 0, sp = []})  
         SetK k      -> case parseFloat k of
@@ -157,12 +158,30 @@ handleCommand cmd s =
                                return s
         Draw a      -> do evalState (words a) s 
                           return s
+        Noop        -> return s
 
 printHelp :: IO ()
-printHelp = putStrLn "Help!"
+printHelp = do putStrLn "Los comandos disponibles son los siguientes:"
+               putStrLn ""
+               mapM_ putStrLn (L.map (\x -> Main.complete (concat (intersperse ", " (getNames x))) ++ getHelp x) commands)
 
-printEnv :: IO ()
-printEnv = putStrLn "Env!"
+complete :: String -> String
+complete s = s ++ (replicate (25 - length s) ' ')
+
+getNames :: InteractiveCommand -> [String]
+getNames (Cmd s _ _ _) = s
+
+getHelp :: InteractiveCommand -> String
+getHelp (Cmd _ _ _ h) = h
+
+printEnv :: State -> IO ()
+printEnv s = do putStr "Kerf: "
+                print (k s)
+                putStrLn ""
+                putStrLn "Contenedores: "
+                putStrLn (PJ.render (printContainers (toList (sc s))))
+                putStrLn "Polígonos: "
+                putStrLn (PJ.render (printPolygons (sp s)))
 
 -- Comando :d --
 ----------------                
@@ -177,6 +196,11 @@ evalState str s = do a <- parseArgs str
                                case res of
                                 Just v  ->
                                     do r <- getRotateds v eP
+                                       --SIO.writeFile str' (draw con (L.map fromC v))
+                                       --Obtener rectángulos y polígonos embebidos
+                                       --GAlgorithm
+                                       --Rotar polígonos (90°)
+                                       --Rotar polígonos (180°)
                                        SIO.writeFile str' (draw con (L.map fromC v))
                                        return ()
                                 Nothing ->

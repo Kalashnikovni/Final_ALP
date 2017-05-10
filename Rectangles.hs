@@ -44,18 +44,18 @@ randomN = randoms (mkStdGen 0) :: [Int]
 ---------------------------
 
 -- El tercer argumento es la lista de rectángulos ya acomodados
-blAlgorithm :: [Container] -> Container -> [Container] -> [Container] 
+blAlgorithm :: Containers -> Container -> Containers -> Containers 
 blAlgorithm []       c lr = []
 blAlgorithm (x : xs) c lr = x' : (blAlgorithm xs c (x' : lr))
     where x' = rBottom (placeRightTop x c) c lr
 
-rBottom :: Container -> Container -> [Container] -> Container
+rBottom :: Container -> Container -> Containers -> Container
 rBottom r c lr = if r == sb 
                  then sb 
                  else rLeft sb c lr
     where sb = shiftBottom r c lr
 
-rLeft :: Container -> Container -> [Container] -> Container
+rLeft :: Container -> Container -> Containers -> Container
 rLeft r c lr = if r == sl 
                then sl 
                else rBottom sl c lr
@@ -74,12 +74,13 @@ placeRightTop r c = C {p1x = x - widthR r,
 
 -- El segundo argumento es el contenedor
 -- El tercer argumento es una lista de los rectángulos ya acomodados
-shiftBottom :: Container -> Container -> [Container] -> Container
+shiftBottom :: Container -> Container -> Containers -> Container
 shiftBottom r c lr = let m = C {p1x = p1x r,
                                 p1y = p1y c,
                                 p2x = p2x r,
                                 p2y = p1y r,
-                                rid = -1}
+                                rid = -1,
+                                nc  = ""}
                          l = filter (\lre -> not ((p1x lre == p2x m) || (p2x lre == p1x m))) (rsWithin m lr)
                          y = if null l then p1y c else p2y (maximumBy by2ypos l)
                      in r {p1y = y, p2y = y + heightR r}
@@ -94,7 +95,7 @@ by2ypos r1 r2 = if y1 > y2
           y2 = p2y r2
 
 -- El segundo argumento es el area "de movimiento"
-rsWithin :: Container -> [Container] -> [Container]
+rsWithin :: Container -> Containers -> Containers
 rsWithin m lr = filter (\lre -> not ((p2x m < p1x lre) || (p2y m < p1y lre) 
                                  || (p2x lre < p1x m) || (p2y lre < p1y m))) lr
 
@@ -103,7 +104,8 @@ shiftLeft r c lr = let m = C {p1x = p1x c,
                               p1y = p1y r,
                               p2x = p1x r,
                               p2y = p2y r,
-                              rid = -1}
+                              rid = -1,
+                              nc  = ""}
                        l = filter (\lre -> not ((p1y lre == p2y m) || (p2y lre == p1y m))) (rsWithin m lr)
                        x = if null l then p1x c else p2x (maximumBy by2xpos l)
                    in r {p1x = x, p2x = x + widthR r}
@@ -122,7 +124,7 @@ by2xpos r1 r2 = if x1 > x2 then GT else
 -- START of genetic algorithm --
 --------------------------------
 
-toLr :: [Int] -> [Container] -> [Container]
+toLr :: [Int] -> Containers -> Containers
 toLr [] _        = []
 toLr (x : xs) lr = filter (\y -> x == rid y) lr ++ (toLr xs lr)
 
@@ -132,7 +134,7 @@ checkInside r c = if p1x r >= p1x c && p1y r >= p1y c && p2x r <= p2x c && p2y r
                   then True
                   else False 
 
-getBest :: [[Container]] -> Container -> Maybe [Container]
+getBest :: [Containers] -> Container -> Maybe Containers
 getBest []     c = Nothing
 getBest (l:lr) c = if and (map (\x -> checkInside x c) l)
                    then Just l
@@ -142,7 +144,7 @@ getBest (l:lr) c = if and (map (\x -> checkInside x c) l)
 -- El tercer argumento es el cardinal del conjunto poblacional
 -- El cuarto argumento es la cantidad de iteraciones del algoritmo genético
 -- El quinto argumento es la probabilidad de rotación
-geneticAlgorithm :: [Container] -> Container -> Int -> Int -> Float -> Maybe [Container]
+geneticAlgorithm :: Containers -> Container -> Int -> Int -> Float -> Maybe Containers
 geneticAlgorithm lr c m t pm = let n          = length lr
                                    pi1        = sortR lr
                                    res        = blAlgorithm pi1 c []
@@ -152,10 +154,10 @@ geneticAlgorithm lr c m t pm = let n          = length lr
                                                 (take (t * (n + 2)) (drop m randomN)) (take (2 * t * (n + 1)) randomL) 
                                in getBest (map fst (reverse (sortBy byFitness loop))) c
 
-sortR :: [Container] -> [Container]
+sortR :: Containers -> Containers
 sortR lr = sortBy compareWidthR lr
 
-fitnessFunction :: [Container] -> Container -> Float
+fitnessFunction :: Containers -> Container -> Float
 fitnessFunction lr c = sum (map areaR (ff lr c' \\ lr)) + areaR c - areaR c'  
     where max_x = p2x (maximumBy by2xpos lr)
           max_y = p2y (maximumBy by2ypos lr)
@@ -163,14 +165,15 @@ fitnessFunction lr c = sum (map areaR (ff lr c' \\ lr)) + areaR c - areaR c'
                      p1y = p1y c,
                      p2x = max_x,
                      p2y = max_y,
-                     rid = rid c}
+                     rid = rid c,
+                     nc  = nc c}
 
-ff :: [Container] -> Container -> [Container]
+ff :: Containers -> Container -> Containers
 ff lr c = up ++ (filter (\x -> and (map (\y -> null (rsWithin x [y])) up)) right)
     where up    = (upR (sortR lr) c lr) \\ lr
           right = (rightR lr  c lr) \\ lr
 
-upR :: [Container] -> Container -> [Container] -> [Container]
+upR :: Containers -> Container -> Containers -> Containers
 upR [] _ all       = all
 upR (l : lr) c all = upR lr c ((if null above then [up] else c_u) ++ all)  
     where up       = getUp l c
@@ -178,7 +181,7 @@ upR (l : lr) c all = upR lr c ((if null above then [up] else c_u) ++ all)
           (m1, m2) = coverUp above
           c_u      = if minus (p2x l) m2 == 0 then [] else [up {p1x = m2}]  
 
-rightR :: [Container] -> Container -> [Container] -> [Container]
+rightR :: Containers -> Container -> Containers -> Containers
 rightR [] _ all       = all
 rightR (l : lr) c all = rightR lr c ((if null side then [right] else c_r) ++ all)  
     where right    = getRight l c
@@ -191,23 +194,25 @@ getUp r c = C {p1x = p1x r,
                p1y = p2y r,
                p2x = p2x r,
                p2y = p2y c,
-               rid = -1}
+               rid = -1,
+               nc  = ""}
 
 getRight :: Container -> Container -> Container
 getRight r c = C {p1x = p2x r, 
                   p1y = p1y r,
                   p2x = p2x c,
                   p2y = p2y r,
-                  rid = -1}
+                  rid = -1,
+                  nc  = ""}
 
-coverUp :: [Container] -> (Float, Float)
+coverUp :: Containers -> (Float, Float)
 coverUp []               = (0, 0)
 coverUp [l]              = (p1x l, p2x l)
 coverUp (l1 : (l2 : lr)) = if x1 <= b then (min a x1, max b (p2x l1)) else (a, b) 
     where (a, b) = coverUp (l2 : lr)
           x1     = p1x l1
 
-coverRight :: [Container] -> (Float, Float)
+coverRight :: Containers -> (Float, Float)
 coverRight []               = (0, 0)
 coverRight [l]              = (p1y l, p2y l)
 coverRight (l1 : (l2 : lr)) = if y1 <= b then (min a y1, max b (p2y l1)) else (a, b) 
@@ -219,7 +224,7 @@ minus x y
     | x > y     = x - y
     | otherwise = 0
 
-population_loop :: [[Container]] -> Container -> Int -> [([Container], Float)]
+population_loop :: [Containers] -> Container -> Int -> [(Containers, Float)]
 population_loop lr c m 
     | m == 0    = []
     | otherwise = (ran, fitnessFunction ran c) : (population_loop lr c (m - 1)) 
@@ -232,7 +237,7 @@ population_loop lr c m
 -- El quinto argumento es la probabilidad de mutación
 -- El sexto argumento es una lista de numeros flotantes random entre 0 y 1
 -- El séptimo argumento es una lista de numeros enteros random
-mainLoop :: [([Container], Float)] -> Container -> Int -> Int -> Float -> [Int] -> [Float] -> [([Container], Float)]
+mainLoop :: [(Containers, Float)] -> Container -> Int -> Int -> Float -> [Int] -> [Float] -> [(Containers, Float)]
 mainLoop pop c m t pm r_n r_l
     | t == 0    = pop
     | otherwise = mainLoop new_pop c m (t - 1) pm (drop (n + 2) r_n) (drop (2 * n) r_l)
@@ -263,7 +268,7 @@ crossover i1 i2 r_n = i1' ++ (i2 \\ i1')
           q   = mod (head (tail r_n)) (length i1 - p) + 1
           i1' = take q (drop p i1)
 
-mutationNormal :: [Container] -> Float -> [Int] -> [Float] -> [Container]
+mutationNormal :: Containers -> Float -> [Int] -> [Float] -> Containers
 mutationNormal []       _ _ _ = []
 mutationNormal (l : lr) pm r_n r_l = if head randomL < pm 
                                      then (lr !! ran) : (mutationNormal (tail (swap 0 ran lr)) pm r_n' r_l')  
@@ -276,7 +281,7 @@ mutationNormal (l : lr) pm r_n r_l = if head randomL < pm
 swap :: Int -> Int -> [a] -> [a]
 swap x y xs = (take x xs) ++ [xs !! y] ++ take (y - x - 1) (drop (x + 1) xs) ++ [xs !! x] ++ take (length xs - y) (drop (y + 1) xs)   
 
-mutation :: [Container] -> Float -> [Float] -> [Container]
+mutation :: Containers -> Float -> [Float] -> Containers
 mutation [] _ _          = []
 mutation (l : lr) pm r_l = (if head r_l < pm then rotate90 l else l) : (mutation lr pm (drop 1 r_l)) 
 
@@ -290,7 +295,7 @@ rotate90 r = C {p1x = x,
     where x = p1x r
           y = p1y r
 
-replaceWorst :: [([Container], Float)] -> ([Container], Float) -> [([Container], Float)]
+replaceWorst :: [(Containers, Float)] -> (Containers, Float) -> [(Containers, Float)]
 replaceWorst pop new = (pop \\ [minimumBy byFitness pop]) ++ [new]
 
 byFitness :: ([a], Float) -> ([a], Float) -> Ordering
