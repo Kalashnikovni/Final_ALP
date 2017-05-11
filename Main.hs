@@ -124,6 +124,7 @@ interpretCommand s = if isPrefixOf ":" s
                      else do putStrLn "Comando desconocido, por favor reintente"
                              return Noop
 
+
 handleCommand :: Command -> State -> IO State
 handleCommand cmd s = 
     case cmd of
@@ -195,9 +196,14 @@ evalState str s = do a <- parseArgs str
                                let res = geneticAlgorithm (L.map fstThree eP) con m t pro 
                                case res of
                                 Just v  ->
-                                    do r <- getRotateds v (L.map fstThree eP)
-                                       pols <- getPols eP r v
-                                       SIO.writeFile str' (draw con (L.map p pols))
+                                    do let order = L.map rid v
+                                       r     <- getRotateds v (L.map fstThree eP)
+                                       pols  <- getPols eP r v
+                                       pols' <- orderByGA pols order
+                                       --SIO.print v
+                                       --SIO.print pols
+                                       --SIO.print pols'
+                                       --SIO.writeFile str' (draw con (L.map p pols))
                                        return ()
                                 Nothing ->
                                     do SIO.putStrLn "Noup!"
@@ -208,19 +214,6 @@ evalState str s = do a <- parseArgs str
 
 fstThree :: (a, b, c) -> a
 fstThree (a, b, c) = a 
-
--- El polígono actual a introducir
--- Containers rotados
--- Containers del algoritmo genetico
-getPols :: [(Container, Polygon, Polygon)] -> [Int] -> Containers -> IO Polygons
-getPols [] cr cga                = return []
-getPols ((c, po, por):ps) cr cga 
-    | notElem (rid c) cr = do res <- getPols ps cr cga
-                              return (po {p = L.map (\(x, y) -> (x + p1x v, y + p1y v)) (p po)} : res)
-    | otherwise          = do res <- getPols ps cr cga
-                              return (por {p = L.map (\(x, y) -> (x + p1x v, y + p1y v)) (p por)} : res) 
-    where Just v = find (\x -> rid x == rid c) cga
-
 
 --BORRAR
 fromC :: Container -> [MyPoint]

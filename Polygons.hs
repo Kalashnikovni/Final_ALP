@@ -11,6 +11,8 @@ import Rectangles (widthR, heightR)
 -- Módulos prestados
 import Data.List
 
+type Order = Int
+
 -- Embeber los polígonos en rectángulos -- 
 ------------------------------------------
 
@@ -80,6 +82,28 @@ rotate cs (po:ps) = case c' of
 -- Sacamos los rectángulos y ponemos los polígonos --
 -----------------------------------------------------
 
+-- El polígono actual a introducir
+-- Containers rotados
+-- Containers del algoritmo genetico
+getPols :: [(Container, Polygon, Polygon)] -> [Int] -> Containers -> IO [(Polygon, Order)]
+getPols [] cr cga                = return []
+getPols ((c, po, por):ps) cr cga 
+    | notElem (rid c) cr = do res <- getPols ps cr cga
+                              return ((po {p = map (\(x, y) -> (x + p1x v, y + p1y v)) (p po)}, rid c) : res)
+    | otherwise          = do res <- getPols ps cr cga
+                              return ((por {p = map (\(x, y) -> (x + p1x v, y + p1y v)) (p por)}, rid c) : res) 
+    where Just v = find (\x -> rid x == rid c) cga
+
+-- Devuelve los polígonos en el orden del algoritmo genético
+orderByGA :: [(Polygon, Order)] -> [Order] -> IO Polygons
+orderByGA _ []      = return []
+orderByGA ps (x:xs) = do res <- orderByGA ps xs
+                         case find (\y -> snd y == x) ps of 
+                            Just v  -> 
+                                return (fst v : res)
+                            Nothing -> 
+                                return []
+
 -- Primero necesito saber cuáles rectángulos fueron rotados
 -- Rectángulos nuevos
 -- Rectángulos originales
@@ -99,6 +123,15 @@ compareCons x (y:ys) = if isSame x y
 
 isSame :: Container -> Container -> Bool
 isSame c1 c2 = rid c1 == rid c2 && abs (widthR c1 - heightR c2) <= 0.001 && abs (heightR c1 - widthR c2) <= 0.001 
+
+
+
+
+
+
+
+
+
 
 -- Rotación alrededor del centroide --
 --------------------------------------
