@@ -17,30 +17,35 @@ import Data.List
 rCons = 16 :: Float
 
 -- Devuelve los puntos del poligono como si el eje estuviera definido por el p1 del contenedor
-embedPols :: Polygons -> Containers
+-- Contenedor, polígono con eje en el container, polígono rotado con el eje en el container
+embedPols :: Polygons -> [(Container, Polygon, Polygon)]
 embedPols []      = []
-embedPols (po:ps) = c : (embedPols ps)
-    where c = (embedPol po (floor rCons)) {rid = length ps}
+embedPols (po:ps) = (a {rid = length ps}, b, c) : (embedPols ps)
+    where (a, b, c) = (embedPol po (floor rCons)) --{rid = length ps}
 
 -- Probamos con 16 posiciones en total
-embedPol :: Polygon -> Int -> Container
-embedPol po 0   = minRect po
+embedPol :: Polygon -> Int -> (Container, Polygon, Polygon)
+embedPol po 0   = (fst mR, snd mR, snd (minRect (po {p = rotatePoints (p po) (pi / 2)})))
+    where mR  = minRect po
 embedPol po den 
-    | areaCon (minRect po) < areaCon (minRect po') = embedPol po (den - 1)
-    | otherwise                                    = embedPol po' (den - 1) 
+    | areaCon (fst mR) < areaCon (fst (minRect po')) = embedPol po (den - 1)
+    | otherwise                                      = embedPol po' (den - 1) 
     where po' = po {p = (rotatePoints (p po) (((fromIntegral den) * 2 * pi) / rCons))}
+          mR  = minRect po
 
 areaCon :: Container -> Float
 areaCon c = abs (p1x c - p2x c) * abs (p1y c - p2y c)
 
-minRect :: Polygon -> Container
-minRect po = C {p1x = 0,
-                p1y = 0,
-                p2x = fst (maximumBy byXPos points) - fst (minimumBy byXPos points),
-                p2y = snd (maximumBy byYPos points) - snd (minimumBy byYPos points),
-                rid = -10,
-                nc  = pn po}
+minRect :: Polygon -> (Container, Polygon)
+minRect po = (C {p1x = 0,
+                 p1y = 0,
+                 p2x = fst (maximumBy byXPos points) - minX,
+                 p2y = snd (maximumBy byYPos points) - minY,
+                 rid = -10,
+                 nc  = pn po}, po {p = map (\(x,y) -> (x - minX, y - minY)) points})
     where points = p po
+          minX   = fst (minimumBy byXPos points)
+          minY   = snd (minimumBy byYPos points)
 
 byXPos :: MyPoint -> MyPoint -> Ordering
 byXPos p1 p2 = if fst p1 < fst p2
@@ -78,11 +83,12 @@ rotate cs (po:ps) = case c' of
 -- Primero necesito saber cuáles rectángulos fueron rotados
 -- Rectángulos nuevos
 -- Rectángulos originales
-getRotateds :: Containers -> Containers -> IO Containers
+--getRotateds :: Containers -> Containers -> IO Containers
+getRotateds :: Containers -> Containers -> IO [Int]
 getRotateds [] _      = return []
 getRotateds (x:xs) ys = case compareCons x ys of
                             Just v  -> do x <- getRotateds xs ys
-                                          return (v : x)
+                                          return (rid v : x)
                             Nothing -> getRotateds xs ys
 
 compareCons :: Container -> Containers -> Maybe Container  
@@ -94,14 +100,17 @@ compareCons x (y:ys) = if isSame x y
 isSame :: Container -> Container -> Bool
 isSame c1 c2 = rid c1 == rid c2 && abs (widthR c1 - heightR c2) <= 0.001 && abs (heightR c1 - widthR c2) <= 0.001 
 
+-- Rotación alrededor del centroide --
+--------------------------------------
+
 centroid :: Polygon -> MyPoint
 centroid pol = ((1/(6 * a)) * sumCoord points fst, (1/(6 * a)) * sumCoord points snd) 
     where points = p pol
-          a      = 1/2 * (area (points ++ [head points]))
+          a      = 1/2 * (areaSigned (points ++ [head points]))
 
-area :: [MyPoint] -> Float
-area [p1, p2]       = fst p1 * snd p2 - fst p2 * snd p1
-area (x:(y:(z:zs))) = (fst x * snd y - fst y * snd x) + area (y:(z:zs))
+areaSigned :: [MyPoint] -> Float
+areaSigned [p1, p2]       = fst p1 * snd p2 - fst p2 * snd p1
+areaSigned (x:(y:(z:zs))) = (fst x * snd y - fst y * snd x) + areaSigned (y:(z:zs))
 
 sumCoord :: [MyPoint] -> ((Float, Float) -> Float) -> Float
 sumCoord [p1, p2] f       = (f p1 + f p2) * (fst p1 * snd p2 - fst p2 * snd p1)

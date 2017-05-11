@@ -189,19 +189,15 @@ printEnv s = do putStr "Kerf: "
 evalState :: [String] -> State -> IO ()  
 evalState str s = do a <- parseArgs str
                      case a of 
-                        Just (c, m, t, p, str') -> 
+                        Just (c, m, t, pro, str') -> 
                             do let eP  = embedPols (sp s)
                                let con = findMin (Set.filter (\x -> rid x == c) (sc s))
-                               let res = geneticAlgorithm eP con m t p 
+                               let res = geneticAlgorithm (L.map fstThree eP) con m t pro 
                                case res of
                                 Just v  ->
-                                    do r <- getRotateds v eP
-                                       --SIO.writeFile str' (draw con (L.map fromC v))
-                                       --Obtener rectángulos y polígonos embebidos
-                                       --GAlgorithm
-                                       --Rotar polígonos (90°)
-                                       --Rotar polígonos (180°)
-                                       SIO.writeFile str' (draw con (L.map fromC v))
+                                    do r <- getRotateds v (L.map fstThree eP)
+                                       pols <- getPols eP r v
+                                       SIO.writeFile str' (draw con (L.map p pols))
                                        return ()
                                 Nothing ->
                                     do SIO.putStrLn "Noup!"
@@ -209,6 +205,22 @@ evalState str s = do a <- parseArgs str
                                        return ()
                         _                    -> 
                             return ()
+
+fstThree :: (a, b, c) -> a
+fstThree (a, b, c) = a 
+
+-- El polígono actual a introducir
+-- Containers rotados
+-- Containers del algoritmo genetico
+getPols :: [(Container, Polygon, Polygon)] -> [Int] -> Containers -> IO Polygons
+getPols [] cr cga                = return []
+getPols ((c, po, por):ps) cr cga 
+    | notElem (rid c) cr = do res <- getPols ps cr cga
+                              return (po {p = L.map (\(x, y) -> (x + p1x v, y + p1y v)) (p po)} : res)
+    | otherwise          = do res <- getPols ps cr cga
+                              return (por {p = L.map (\(x, y) -> (x + p1x v, y + p1y v)) (p por)} : res) 
+    where Just v = find (\x -> rid x == rid c) cga
+
 
 --BORRAR
 fromC :: Container -> [MyPoint]
