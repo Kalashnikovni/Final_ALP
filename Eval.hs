@@ -115,13 +115,13 @@ whichQuadrant p1 p2
 distLines :: MyPoint -> MyPoint -> MyPoint -> MyPoint -> Maybe Float
 distLines p1 p2 p3 p4 = case intersectLineLine p1 p2 p3 p4 of
                             Nothing -> if fst p1 /= fst p2 
-                                       then Just $ abs (c2 - c1) / sqrt (m * m + b * b)
+                                       then Just $ abs (c2 - c1) / sqrt (m * m + 1) -- m * m + b * b FIXME
                                        else Just $ abs (fst p1 - fst p3)
                             _       -> Nothing
-    where c1 = m * fst p1 - snd p1 
-          c2 = m * fst p3 - snd p3
+    where c1 = m * fst p1 - snd p1 -- snd p1 - m * fst p1 FIXME chequear cuál está bien
+          c2 = m * fst p3 - snd p3 -- snd p3 - m * fst p3 FIXME chequear cuál está bien
           m  = (snd p2 - snd p1) / (fst p2 - fst p1)
-          b  = 1
+          --b  = 1
 
 -- SVGFiles --
 --------------
@@ -200,7 +200,7 @@ checkPolSlow p = if check3sides p
 check3sides :: Polygon -> Bool
 check3sides po = length (p po) >= 3
 
---checkIntersections :: Polygon -> [LineSegment 2 () Float]
+--checkIntersections :: Polygon -> [LineSegment 2 () Float] FIXME
 checkIntersections po = length (BO.intersections (toLSegments (pol ++ [head pol]))) /= length pol
     where pol = p po
 
