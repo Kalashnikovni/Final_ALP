@@ -39,7 +39,7 @@ evalDefP (Dp po s) = po {p = map (\(x,y) -> (x * s, y * s)) (p po)}
 
 evalMac :: Machine -> (Containers, Polygons)
 evalMac (Kerf k ds) = let (c, p) = (filter isContainer ds, filter isPolygon ds)
-                      in (map evalDefC c, map (addKerf k) (map evalDefP p))
+                      in (map evalDefC c, map (addKerf k (\x -> areaSigned x < 0)) (map evalDefP p))
 
 isContainer :: Def -> Bool
 isContainer (Dc _ _) = True
@@ -49,22 +49,17 @@ isPolygon :: Def -> Bool
 isPolygon (Dp _ _) = True
 isPolygon _          = False
 
-addKerf :: Float -> Polygon -> Polygon
-addKerf o po
+addKerf :: Float -> ([MyPoint] -> Bool) -> Polygon -> Polygon
+addKerf o f po 
     | length l < 3 = po
     | otherwise    = (newPoints (l ++ [head l])) {pn = pn po}  
     where ppo = p po
-          l   = linearize o (ppo ++ [head ppo]) ppo 
+          l   = linearize o (ppo ++ [head ppo]) (f ppo) 
 
 -- Obtiene las rectas "offseteadas" correspondientes a cada segmento
-linearize :: Float -> [MyPoint] -> [MyPoint] -> [(MyPoint, MyPoint)]
-linearize _ _ []          = []
-linearize o [] ps         = []
-linearize o [w] ps        = []
-linearize o (w:(x:ys)) ps
-    | not (null res) = offsetLine o w x (head res) : (linearize o (x:ys) ps)    
-    | otherwise      = []
-    where res = (ps \\ [w, x]) \\ [w, x]
+linearize :: Float -> [MyPoint] -> Bool -> [(MyPoint, MyPoint)]
+linearize o (w:(x:ys)) b = offsetLine o w x b : (linearize o (x:ys) b)    
+linearize _ _ _          = []
 
 newPoints :: [(MyPoint, MyPoint)] -> Polygon
 newPoints []  = P {p = [], pn = ""}
@@ -74,24 +69,37 @@ newPoints (x:(y:zs)) = case intersectLineLine (fst x) (snd x) (fst y) (snd y) of
                         Just pn -> po {p = pn : (p po)} 
     where po = newPoints (y:zs)
 
-offsetLine :: Float -> MyPoint -> MyPoint -> MyPoint -> (MyPoint, MyPoint)
-offsetLine o p1 p2 p3
-    | fst p1 == fst p2 = if v > 0
-                         then if q == II
-                              then sp
-                              else sm  
-                         else if q == II
-                              then sm
-                              else sp 
-    | v > 0 = if q == I || q == IV
-              then pm
-              else pp
-    | v < 0 = if q == I || q == IV
-              then pp
-              else pm
-    | v == 0 = ((0, 0), p3)
+-- <0 is clockwise, >0 is counter clockwise FIXME 
+{-areaSigned :: [MyPoint] -> Float
+areaSigned ps = aS (ps ++ [head ps])
+    where aS [p1, p2]       = fst p1 * snd p2 - fst p2 * snd p1
+          aS (x:(y:(z:zs))) = (fst x * snd y - fst y * snd x) + aS (y:(z:zs))
+-}
+areaSigned :: [MyPoint] -> Float
+areaSigned points = sum (zipWith (*) xdiffs ysums)
+    where xdiffs = zipWith (-) xs (tail xs ++ [head xs])
+          ysums  = zipWith (+) ys (tail ys ++ [head ys])
+          xs = map fst points
+          ys = map snd points 
+
+-- True is clockwise, False is counter clockwise
+-- TODO: justificar por qué si clockwise sumo en tales cuadrantes, y si es counter sumo en los opuestos
+offsetLine :: Float -> MyPoint -> MyPoint -> Bool -> (MyPoint, MyPoint)
+offsetLine o p1 p2 b 
+    | fst p1 == fst p2  = if b
+                          then if q == II
+                               then sm
+                               else sp
+                          else if q == II
+                               then sp
+                               else sm  
+    | q == I || q == IV = if b 
+                          then pp
+                          else pm 
+    | otherwise         = if b 
+                          then pm
+                          else pp
     where q     = whichQuadrant p1 p2
-          v     = (fst p2 - fst p1) * (snd p3 - snd p1) - (fst p3 - fst p1) * (snd p2 - snd p1) 
           alpha = if q == I || q == II
                   then angleVV (0,1) (fst p2 - fst p1, snd p2 - snd p1) 
                   else pi - angleVV (0,1) (fst p2 - fst p1, snd p2 - snd p1) 
@@ -100,9 +108,6 @@ offsetLine o p1 p2 p3
           pm    = ((fst p1, snd p1 - h), (fst p2, snd p2 - h)) 
           sp    = ((fst p1 + o, snd p1), (fst p2 + o, snd p2))
           sm    = ((fst p1 - o, snd p1), (fst p2 - o, snd p2))
-
-determinant :: MyPoint -> MyPoint -> MyPoint -> Float
-determinant p1 p2 p3 = (fst p2 - fst p1) * (snd p3 - snd p1) - (fst p3 - fst p1) * (snd p2 - snd p1)
 
 whichQuadrant :: MyPoint -> MyPoint -> Eval.Quadrant
 whichQuadrant p1 p2 
@@ -148,7 +153,7 @@ applyT1 p Thrash                     = p
 
 evalSVGPol :: SVGPolygon -> Float -> Polygon
 evalSVGPol pol k
-    | null (tpo pol) = addKerf k (P {p = po pol, pn = npo pol})
+    | null (tpo pol) = addKerf k (\x -> areaSigned x < 0) (P {p = po pol, pn = npo pol})
     | otherwise      = evalSVGPol (pol {po = map (\x -> applyT1 x (head (tpo pol))) (po pol), tpo = tail (tpo pol)}) k
 
 evalPath :: Path -> Float -> Polygon

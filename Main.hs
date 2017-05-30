@@ -187,10 +187,11 @@ printEnv s = do putStr "Kerf: "
 -- Comando :d --
 ----------------                
  
+-- FIXME: no container defined
 evalState :: [String] -> State -> IO ()  
 evalState str s = do a <- parseArgs str
                      case a of 
-                        Just (c, m, t, pro, str') -> 
+                        Just (c, m, t, pro, file) -> 
                             do let eP  = embedPols (sp s)
                                let con = findMin (Set.filter (\x -> rid x == c) (sc s))
                                let res = geneticAlgorithm (L.map fstThree eP) con m t pro 
@@ -203,7 +204,7 @@ evalState str s = do a <- parseArgs str
                                        --SIO.print v
                                        --SIO.print pols
                                        --SIO.print pols'
-                                       --SIO.writeFile str' (draw con (L.map p pols))
+                                       SIO.writeFile file (draw con (L.map p pols') (k s))
                                        return ()
                                 Nothing ->
                                     do SIO.putStrLn "Noup!"

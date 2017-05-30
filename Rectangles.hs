@@ -295,6 +295,7 @@ rotate90 r = C {p1x = x,
     where x = p1x r
           y = p1y r
 
+-- FIXME: si hay empate, quitar el de "máxima altura"
 replaceWorst :: [(Containers, Float)] -> (Containers, Float) -> [(Containers, Float)]
 replaceWorst pop new = (pop \\ [minimumBy byFitness pop]) ++ [new]
 

@@ -82,6 +82,7 @@ rotate cs (po:ps) = case c' of
     where c' = find (\x -> nc x == pn po) cs 
 -}
 
+
 -- Sacamos los rectángulos y ponemos los polígonos --
 -----------------------------------------------------
 
@@ -181,7 +182,7 @@ intersectIntervals a b = (b1 < a1 && a1 < b2) || (b2 < a1 && a1 < b1) || (b1 < a
 -- Rotación alrededor del centroide --
 --------------------------------------
 
-centroid :: Polygon -> MyPoint
+{-centroid :: Polygon -> MyPoint
 centroid pol = ((1/(6 * a)) * sumCoord points fst, (1/(6 * a)) * sumCoord points snd) 
     where points = p pol
           a      = 1/2 * (areaSigned (points ++ [head points]))
@@ -198,3 +199,4 @@ rotate90Centroid :: Polygon -> Polygon
 rotate90Centroid pol = pol {p = map (\(x,y) -> (x + cx, y + cy)) (rotatePoints (map (\(x,y) -> (x - cx, y - cy)) (p pol)) (pi / 2))}
     where cx = fst (centroid pol)
           cy = snd (centroid pol)
+-}
