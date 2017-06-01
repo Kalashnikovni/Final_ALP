@@ -70,11 +70,6 @@ newPoints (x:(y:zs)) = case intersectLineLine (fst x) (snd x) (fst y) (snd y) of
     where po = newPoints (y:zs)
 
 -- <0 is clockwise, >0 is counter clockwise FIXME 
-{-areaSigned :: [MyPoint] -> Float
-areaSigned ps = aS (ps ++ [head ps])
-    where aS [p1, p2]       = fst p1 * snd p2 - fst p2 * snd p1
-          aS (x:(y:(z:zs))) = (fst x * snd y - fst y * snd x) + aS (y:(z:zs))
--}
 areaSigned :: [MyPoint] -> Float
 areaSigned points = sum (zipWith (*) xdiffs ysums)
     where xdiffs = zipWith (-) xs (tail xs ++ [head xs])
@@ -86,13 +81,6 @@ areaSigned points = sum (zipWith (*) xdiffs ysums)
 -- TODO: justificar por qué si clockwise sumo en tales cuadrantes, y si es counter sumo en los opuestos
 offsetLine :: Float -> MyPoint -> MyPoint -> Bool -> (MyPoint, MyPoint)
 offsetLine o p1 p2 b 
-    | fst p1 == fst p2  = if b
-                          then if q == II
-                               then sm
-                               else sp
-                          else if q == II
-                               then sp
-                               else sm  
     | q == I || q == IV = if b 
                           then pp
                           else pm 
@@ -103,11 +91,13 @@ offsetLine o p1 p2 b
           alpha = if q == I || q == II
                   then angleVV (0,1) (fst p2 - fst p1, snd p2 - snd p1) 
                   else pi - angleVV (0,1) (fst p2 - fst p1, snd p2 - snd p1) 
-          h     =  o / (sin alpha)
-          pp    = ((fst p1, snd p1 + h), (fst p2, snd p2 + h)) 
-          pm    = ((fst p1, snd p1 - h), (fst p2, snd p2 - h)) 
-          sp    = ((fst p1 + o, snd p1), (fst p2 + o, snd p2))
-          sm    = ((fst p1 - o, snd p1), (fst p2 - o, snd p2))
+          h     = o / (sin alpha)
+          pp    = if isNaN h || isInfinite h
+                  then ((fst p1 + o, snd p1), (fst p2 + o, snd p2)) 
+                  else ((fst p1, snd p1 + h), (fst p2, snd p2 + h)) 
+          pm    = if isNaN h || isInfinite h
+                  then ((fst p1 - o, snd p1), (fst p2 - o, snd p2)) 
+                  else ((fst p1, snd p1 - h), (fst p2, snd p2 - h)) 
 
 whichQuadrant :: MyPoint -> MyPoint -> Eval.Quadrant
 whichQuadrant p1 p2 
@@ -115,18 +105,6 @@ whichQuadrant p1 p2
     | fst p1 >= fst p2 && snd p1 < snd p2 = II
     | fst p1 > fst p2 && snd p1 >= snd p2 = III
     | otherwise                           = IV 
-
--- Las lineas argumento deben ser paralelas
-distLines :: MyPoint -> MyPoint -> MyPoint -> MyPoint -> Maybe Float
-distLines p1 p2 p3 p4 = case intersectLineLine p1 p2 p3 p4 of
-                            Nothing -> if fst p1 /= fst p2 
-                                       then Just $ abs (c2 - c1) / sqrt (m * m + 1) -- m * m + b * b FIXME
-                                       else Just $ abs (fst p1 - fst p3)
-                            _       -> Nothing
-    where c1 = m * fst p1 - snd p1 -- snd p1 - m * fst p1 FIXME chequear cuál está bien
-          c2 = m * fst p3 - snd p3 -- snd p3 - m * fst p3 FIXME chequear cuál está bien
-          m  = (snd p2 - snd p1) / (fst p2 - fst p1)
-          --b  = 1
 
 -- SVGFiles --
 --------------

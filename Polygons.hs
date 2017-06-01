@@ -6,13 +6,12 @@ module Polygons where
 
 -- Módulos propios
 import Common
-import Eval (distLines)
 import Rectangles (widthR, heightR)
 
 -- Módulos prestados
 import Data.List
 
-import Graphics.Gloss.Geometry.Line (intersectSegSeg)
+import Graphics.Gloss.Geometry.Line (intersectSegSeg, intersectLineLine)
 
 type Order = Int
 
@@ -175,7 +174,17 @@ intersectIntervals a b = (b1 < a1 && a1 < b2) || (b2 < a1 && a1 < b1) || (b1 < a
           b1 = fst b
           b2 = snd b
 
-
+-- Las lineas argumento deben ser paralelas
+distLines :: MyPoint -> MyPoint -> MyPoint -> MyPoint -> Maybe Float
+distLines p1 p2 p3 p4 = case intersectLineLine p1 p2 p3 p4 of
+                            Nothing -> if fst p1 /= fst p2 
+                                       then Just $ abs (c2 - c1) / sqrt (m * m + 1) -- m * m + b * b FIXME
+                                       else Just $ abs (fst p1 - fst p3)
+                            _       -> Nothing
+    where c1 = m * fst p1 - snd p1 -- snd p1 - m * fst p1 FIXME chequear cuál está bien
+          c2 = m * fst p3 - snd p3 -- snd p3 - m * fst p3 FIXME chequear cuál está bien
+          m  = (snd p2 - snd p1) / (fst p2 - fst p1)
+          --b  = 1
 
 
 

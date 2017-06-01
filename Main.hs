@@ -189,11 +189,10 @@ printEnv s = do putStr "Kerf: "
  
 -- FIXME: no container defined
 evalState :: [String] -> State -> IO ()  
-evalState str s = do a <- parseArgs str
+evalState str s = do a <- parseArgs str s
                      case a of 
-                        Just (c, m, t, pro, file) -> 
+                        Just (con, m, t, pro, file) -> 
                             do let eP  = embedPols (sp s)
-                               let con = findMin (Set.filter (\x -> rid x == c) (sc s))
                                let res = geneticAlgorithm (L.map fstThree eP) con m t pro 
                                case res of
                                 Just v  ->
@@ -220,10 +219,14 @@ fstThree (a, b, c) = a
 fromC :: Container -> [MyPoint]
 fromC c = [(p1x c, p1y c), (p2x c, p1y c), (p2x c, p2y c), (p1x c, p2y c)]
 
-parseArgs :: [String] -> IO (Maybe (Int, Int, Int, Float, String))
-parseArgs [c, m, t, p, s] = 
+parseArgs :: [String] -> State -> IO (Maybe (Container, Int, Int, Float, String))
+parseArgs [c, m, t, p, s] st = 
     case reads c :: [(Int, String)] of
         [(c, "")] -> 
+            let con = Set.filter (\x -> rid x == c) (sc st)
+            in if Set.null con 
+            then printiarg
+            else
             case reads m :: [(Int, String)] of
                 [(n1, "")] -> 
                     case reads t :: [(Int, String)] of
@@ -231,19 +234,20 @@ parseArgs [c, m, t, p, s] =
                             case parseFloat p of
                                 Parse.Ok v       ->
                                     case reads s :: [(String, String)] of
-                                        [(st, "")] -> do b <- doesFileExist st
-                                                         case b of
-                                                            True  -> do SIO.putStrLn "\nArchivo existente, elija otro nombre\n"
-                                                                        return Nothing
-                                                            False -> if n1 < 1 || n2 < 1 || v < 0 || v > 1
-                                                                     then printiarg
-                                                                     else return (Just (c, n1, n2, v, st))
+                                        [(st, "")] -> 
+                                            do b <- doesFileExist st
+                                               case b of
+                                                True  -> do SIO.putStrLn "\nArchivo existente, elija otro nombre\n"
+                                                            return Nothing
+                                                False -> if n1 < 1 || n2 < 1 || v < 0 || v > 1
+                                                         then printiarg
+                                                         else return (Just (findMin con, n1, n2, v, st))
                                 Parse.Failed str -> do SIO.putStrLn str
                                                        return Nothing
                         _                  -> printiarg 
                 _                   -> printiarg
         _                 -> printiarg
-parseArgs _ = printiarg 
+parseArgs _ _ = printiarg 
 
 printiarg :: IO (Maybe a)
 printiarg = do SIO.putStrLn invalidarg
