@@ -2,6 +2,8 @@
 -- ===== Implementación de funciones referidas a los rectángulos =====
 -- ===================================================================
 
+-- TODO: usar Control.Monad.Loops
+
 module Rectangles where
 
 -- Módulos propios
@@ -9,10 +11,13 @@ import Common
 
 -- Módulos prestados
 import Data.List as L
-import System.Environment
-import System.Random as Random
-import System.IO.Unsafe as Unsafe
+
 import Control.Monad.State.Lazy as StateMonad
+import Control.Monad.Loops -- iterateWhile para gaalgorithm
+
+import System.Environment
+import System.IO.Unsafe as Unsafe
+import System.Random as Random
 
 -- Data definitions --
 ----------------------
@@ -144,27 +149,31 @@ getBest (l:lr) c = if and (map (\x -> checkInside x c) l)
 -- El tercer argumento es el cardinal del conjunto poblacional
 -- El cuarto argumento es la cantidad de iteraciones del algoritmo genético
 -- El quinto argumento es la probabilidad de rotación
-geneticAlgorithm :: Containers -> Container -> Int -> Int -> Float -> Maybe Containers
+{-geneticAlgorithm :: Containers -> Container -> Int -> Int -> Float -> Maybe Containers
 geneticAlgorithm lr c m t pm = let n          = length lr
                                    pi1        = sortR lr
                                    res        = blAlgorithm pi1 c []
                                    a1         = [(res, fitnessFunction res c)]
-                                   population = a1 ++ population_loop (permutations lr) c m 
+                                   population = a1 ++ populationLoop (permutations lr) c m 
                                    loop       = mainLoop population c m t pm 
                                                 (take (t * (n + 2)) (drop m randomN)) (take (2 * t * (n + 1)) randomL) 
                                in getBest (map fst (reverse (sortBy byFitness loop))) c
+-}
+
+geneticAlgorithm :: Containers -> Container -> Int -> Int -> Float -> Maybe Containers
+geneticAlgorithm lr c m t pm = let n          = length lr
 
 sortR :: Containers -> Containers
 sortR lr = sortBy compareWidthR lr
 
 fitnessFunction :: Containers -> Container -> Float
 fitnessFunction lr c = sum (map areaR (ff lr c' \\ lr)) + areaR c - areaR c'  
-    where max_x = p2x (maximumBy by2xpos lr)
-          max_y = p2y (maximumBy by2ypos lr)
+    where maxX = p2x (maximumBy by2xpos lr)
+          maxY = p2y (maximumBy by2ypos lr)
           c'    = C {p1x = p1x c,
                      p1y = p1y c,
-                     p2x = max_x,
-                     p2y = max_y,
+                     p2x = maxX,
+                     p2y = maxY,
                      rid = rid c,
                      nc  = nc c}
 
@@ -224,11 +233,20 @@ minus x y
     | x > y     = x - y
     | otherwise = 0
 
-population_loop :: [Containers] -> Container -> Int -> [(Containers, Float)]
-population_loop lr c m 
+{-populationLoop :: [Containers] -> Container -> Int -> [(Containers, Float)]
+populationLoop lr c m 
     | m == 0    = []
-    | otherwise = (ran, fitnessFunction ran c) : (population_loop lr c (m - 1)) 
+    | otherwise = (ran, fitnessFunction ran c) : (populationLoop lr c (m - 1)) 
     where ran = blAlgorithm (lr !! (mod (randomN !! m) (length lr))) c []
+-}
+
+populationLoop :: [Containers] -> Container -> Int -> IO [(Containers, Float)]
+populationLoop lr c m
+    | m == 0    = return []
+    | otherwise = do x   <- populationLoop lr c (m - 1)
+                     n   <- randomIO :: IO Float
+                     let ran = blAlgorithm (lr !! (floor (n * (fromIntegral (length lr))))) c [] 
+                     return ((ran, fitnessFunction ran c) : x)
 
 -- El primer argumento representa a cada configuracion junto con su fitness
 -- El segundo argumento es el contenedor
@@ -251,6 +269,11 @@ mainLoop pop c m t pm r_n r_l
           mut       = mutation mut_n pm (drop n r_l)
           last      = blAlgorithm mut c []
           new_pop   = replaceWorst pop (last, fitnessFunction last c)
+
+
+{-mainLoop :: [(Containers, Float)] -> Container -> Int -> Int -> Float -> [Int] -> [Float] -> [(Containers, Float)]
+mainLoop pop c m t pm r_n r_l =
+    iterateWhile (t > 0) ()-}
 
 propSelection :: [[Int]] -> Int -> [Float] -> ([Int], [Int])
 propSelection lr m r_l = let (p1, p2) = (head r_l, head (tail r_l))
