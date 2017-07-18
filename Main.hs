@@ -193,7 +193,7 @@ evalState str s = do a <- parseArgs str s
                      case a of 
                         Just (con, m, t, pro, file) -> 
                             do let eP  = embedPols (sp s)
-                               res <- geneticAlgorithm (L.map fstThree eP) con m t pro 
+                               let res = geneticAlgorithm (L.map fstThree eP) con m t pro 
                                case res of
                                 Just v  ->
                                     do let order = L.map rid v

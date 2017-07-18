@@ -2,25 +2,26 @@
 -- ===== Implementación de funciones referidas a los rectángulos =====
 -- ===================================================================
 
--- TODO: usar Control.Monad.Loops
-
 module Rectangles where
 
 -- Módulos propios
 import Common
 
 -- Módulos prestados
+import AI.GeneticAlgorithm.Simple
+
+import Control.DeepSeq
+import Control.Monad.Random.Class
+import Control.Monad.State.Lazy as StateMonad
+import Control.Monad.Loops 
+
 import Data.List as L
 
-import Control.Monad.State.Lazy as StateMonad
-import Control.Monad.Loops -- iterateWhile para gaalgorithm
+import GHC.Float
 
 import System.Environment
 import System.IO.Unsafe as Unsafe
 import System.Random as Random
-
--- Data definitions --
-----------------------
 
 -- Funciones auxiliares --
 --------------------------
@@ -39,10 +40,6 @@ heightR r = p2y r - p1y r
 
 areaR :: Container -> Float
 areaR r = heightR r * widthR r       
-
---randomL = (randomRs (0, 1) (mkStdGen 0)) :: [Float]
-
---randomN = randoms (mkStdGen 0) :: [Int]
 
 ---------------------------
 -- START of BL algorithm --
@@ -128,29 +125,50 @@ by2xpos r1 r2 = if x1 > x2 then GT else
 --------------------------------
 -- START of genetic algorithm --
 --------------------------------
+newtype Con = Con (Containers, Container, Float)
+
+geneticAlgorithm :: Containers -> Container -> Int -> Int -> Float -> Maybe Containers 
+geneticAlgorithm lr c m t pm 
+    | and (map (\x -> checkInside x c) res) = Just res 
+    | otherwise                             = Nothing
+    where res = getContainers (runGA (mkStdGen 100) m (float2Double pm) (populationLoop (Con (lr, c, pm)) c m) (stopf t))
+
+populationLoop lr@(Con (cs, cc, pm)) c m
+    | m == 0    = return (Con ([], cc, pm))
+    | otherwise = do let ran = blAlgorithm cs c [] 
+                     return (Con (ran, cc, pm))
+
+getContainers (Con (a, _, _)) = a
+                     
+stopf t a i = i < t 
+
+instance NFData Container where
+    rnf x = seq x ()
+
+instance NFData Con where
+    rnf x = seq x ()
+
+instance Chromosome Con where
+    crossover (Con (cs1, c1, pm1)) (Con (cs2, c2, pm2)) = 
+        do p <- getRandomR (1, length cs1 - 1)
+           q <- getRandomR (1, length cs1 - p)
+           let c1' = take q (drop p cs1) 
+           return [Con (c1' ++ (cs2 \\ c1'), c1, pm1)]
+
+    mutation (Con (cs, c, pm)) = 
+        do g  <- mut cs pm
+           r1 <- getRandomR (0, length cs - 1)
+           r2 <- getRandomR (0, length cs - 1)
+           return (Con (swap r1 r2 g, c, pm))
+
+    fitness (Con (cs, c, pm)) = float2Double (fitnessFunction cs c) 
 
 -- Chequeo si efectivamente todos los rectángulos se encuentran dentro del contenedor
+-- El segundo argumento es el contenedor
 checkInside :: Container -> Container -> Bool
 checkInside r c = if p1x r >= p1x c && p1y r >= p1y c && p2x r <= p2x c && p2y r <= p2y c
                   then True
                   else False 
-
-getBest :: [Containers] -> Container -> Maybe Containers
-getBest []     c = Nothing
-getBest (l:lr) c = if and (map (\x -> checkInside x c) l)
-                   then Just l
-                   else getBest lr c
-
--- El segundo argumento es el contenedor
--- El tercer argumento es el cardinal del conjunto poblacional
--- El cuarto argumento es la cantidad de iteraciones del algoritmo genético
--- El quinto argumento es la probabilidad de rotación
-geneticAlgorithm :: Containers -> Container -> Int -> Int -> Float -> IO (Maybe Containers)
-geneticAlgorithm lr c m t pm =
-    do let res = blAlgorithm (sortR lr) c []
-       pop  <- populationLoop (permutations lr) c m
-       loop <- mainLoop ((res, fitnessFunction res c) : pop) c m t pm
-       return (getBest (map fst (reverse (sortBy byFitness loop))) c)
 
 sortR :: Containers -> Containers
 sortR lr = sortBy compareWidthR lr
@@ -222,84 +240,16 @@ minus x y
     | x > y     = x - y
     | otherwise = 0
 
-populationLoop :: [Containers] -> Container -> Int -> IO [(Containers, Float)]
-populationLoop lr c m
-    | m == 0    = return []
-    | otherwise = do x   <- populationLoop lr c (m - 1)
-                     n   <- randomIO :: IO Int
-                     let ran = blAlgorithm (lr !! ((mod n (length lr)))) c [] 
-                     return ((ran, fitnessFunction ran c) : x)
-
--- El primer argumento representa a cada configuracion junto con su fitness
--- El segundo argumento es el contenedor
--- El tercer argumento es el cardinal de la poblacion
--- El cuarto argumento es la cantidad de iteraciones del loop
--- El quinto argumento es la probabilidad de mutación
--- El sexto argumento es una lista de numeros flotantes random entre 0 y 1
--- El séptimo argumento es una lista de numeros enteros random
-mainLoop :: [(Containers, Float)] -> Container -> Int -> Int -> Float -> IO [(Containers, Float)]
-mainLoop pop c m t pm 
-    | t == 0    = return pop
-    | otherwise = do let pi = map (\x -> map (\y -> rid y) (fst x)) pop
-                     (a, b) <- selectLoop pi m
-                     new    <- crossover a b
-                     newR   <- toLr new (fst (head pop))
-                     mutN   <- mutationNormal newR  
-                     mut    <- mutation mutN pm
-                     let last = blAlgorithm mut c []
-                     newPop <- replaceWorst pop (last, fitnessFunction last c)
-                     mainLoop pop c m (t - 1) pm
-    
-toLr :: [Int] -> Containers -> IO Containers
-toLr [] _        = return []
-toLr (x : xs) lr = do let f = filter (\y -> x == rid y) lr 
-                      res <- toLr xs lr
-                      return (f ++ res)
-
-selectLoop :: [[Int]] -> Int -> IO ([Int], [Int]) 
-selectLoop lr m = do (a, b) <- propSelection lr m
-                     if a == b
-                     then selectLoop lr m
-                     else return (a, b)
-
-propSelection :: [[Int]] -> Int -> IO ([Int], [Int])
-propSelection lr m =
-    do p1 <- randomIO :: IO Float  
-       p2 <- randomIO :: IO Float
-       let a = length (filter (\x -> x <= p1) lim) - 1
-       let b = length (filter (\x -> x <= p2) lim) - 1
-       return (lr !! a, lr !! b)
-    where lim = createL m 
-
-createL :: Int -> [Float]
-createL m = map (\x -> (fromIntegral x :: Float) / (fromIntegral m :: Float)) [0..m]
-
-crossover :: [Int] -> [Int] -> IO [Int]
-crossover i1 i2 = do p <- randomIO :: IO Int
-                     q <- randomIO :: IO Int
-                     let p'  = mod p (length i1)
-                     let q'  = if length i1 - p' > 0 then mod q (length i1 - p') + 1 else 0 
-                     let i1' = take p' (drop q' i1) 
-                     return (i1' ++ (i2 \\ i1'))
-
-mutationNormal :: Containers -> IO Containers
-mutationNormal [] = return []
-mutationNormal lr = do r1 <- randomIO :: IO Int
-                       r2 <- randomIO :: IO Int
-                       return (swap (mod r1 llr) (mod r2 llr) lr) 
-    where llr = length lr
+mut [] _      = return []
+mut (l:lr) pm = do p   <- getRandomR (0.0, 1.0)
+                   res <- mut lr pm
+                   return ((if p < pm
+                            then rotate90 l
+                            else l) : res) 
 
 -- Se asume que x < y
 swap :: Int -> Int -> [a] -> [a]
 swap x y xs = (take x xs) ++ [xs !! y] ++ take (y - x - 1) (drop (x + 1) xs) ++ [xs !! x] ++ take (length xs - y) (drop (y + 1) xs)   
-
-mutation :: Containers -> Float -> IO Containers
-mutation [] _      = return []
-mutation (l:lr) pm = do p <- randomIO :: IO Float
-                        res <- mutation lr pm
-                        return ((if p < pm
-                                 then rotate90 l
-                                 else l) : res) 
 
 rotate90 :: Container -> Container
 rotate90 r = C {p1x = x,
@@ -311,39 +261,7 @@ rotate90 r = C {p1x = x,
     where x = p1x r
           y = p1y r
 
--- FIXME: si hay empate, quitar el de "máxima altura"
-replaceWorst :: [(Containers, Float)] -> (Containers, Float) -> IO [(Containers, Float)]
-replaceWorst pop new = return ((pop \\ [minimumBy byFitness pop]) ++ [new])
-
-byFitness :: ([a], Float) -> ([a], Float) -> Ordering
-byFitness (l1, f1) (l2, f2) = if f1 > f2 
-                              then GT
-                              else if f1 == f2 
-                                   then EQ 
-                                   else LT
-
 ------------------------------
 -- END of genetic algorithm --
 ------------------------------  
-          
---------------------------
--- END of main function --
---------------------------
-
--- ***************** --
--- Sector de pruebas --
--- ***************** --
-{-
-r1 = C {p1x = 0, p1y = 0, p2x = 3, p2y = 3, rid = 1, nc = ""}
-r2 = C {p1x = 10, p1y = 0, p2x = 15, p2y = 7, rid = 2, nc = ""}
-r3 = C {p1x = 0, p1y = 0, p2x = 10, p2y = 5, rid = 3, nc = ""}
-r4 = C {p1x = 0, p1y = 5, p2x = 7, p2y = 14, rid = 4, nc = ""}
-c1 = C {p1x = 0, p1y = 0, p2x = 17, p2y = 20, nc = "c1", rid = 0}
--}
-cc = C {p1x = 0, p1y = 0, p2x = 20, p2y = 20, nc = "cc", rid = 0}
-a1 = C {p1x = 0, p1y = 0, p2x = 5, p2y = 16, rid = 1, nc = ""}
-a2 = C {p1x = 8, p1y = 0, p2x = 17, p2y = 14, rid = 2, nc = ""}
-a3 = C {p1x = 5, p1y = 0, p2x = 8, p2y = 3, rid = 3, nc = ""}
-a4 = C {p1x = 5, p1y = 14, p2x = 10, p2y = 16, rid = 4, nc = ""}
-
 
