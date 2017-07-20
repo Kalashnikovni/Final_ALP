@@ -6,7 +6,7 @@ module Polygons where
 
 -- Módulos propios
 import Common
-import Rectangles (widthR, heightR)
+import GA (widthR, heightR)
 
 -- Módulos prestados
 import Data.List
@@ -129,9 +129,8 @@ isSame c1 c2 = rid c1 == rid c2 && abs (widthR c1 - heightR c2) <= 0.001 && abs 
 
 -- Etapa de shrink --
 ---------------------
-
 -- True si hay intersecciones, False en caso contrario
-polygonCutA :: Polygon -> Polygon -> Bool
+{-polygonCutA :: Polygon -> Polygon -> Bool
 polygonCutA p1 p2 = sidesIntersections (getSides (p p1)) (getSides (p p2))
     
 getSides :: [MyPoint] -> [(MyPoint, MyPoint)]
@@ -185,7 +184,7 @@ distLines p1 p2 p3 p4 = case intersectLineLine p1 p2 p3 p4 of
           c2 = m * fst p3 - snd p3 -- snd p3 - m * fst p3 FIXME chequear cuál está bien
           m  = (snd p2 - snd p1) / (fst p2 - fst p1)
           --b  = 1
-
+-}
 
 
 -- Rotación alrededor del centroide --

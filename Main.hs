@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
@@ -6,12 +7,13 @@ module Main where
 import Common
 import Draw
 import Eval
+import GA
 import Parse
 import Parse_SVG
 import ParseSVGElements as PSE
 import Polygons as Pol --(embedPols, takeOut, rotate, getRotateds, getContainers)
 import PrettyPrint as PP
-import Rectangles
+import Shrink
 
 -- Módulos prestados 
 import Control.Exception
@@ -200,10 +202,9 @@ evalState str s = do a <- parseArgs str s
                                        r     <- getRotateds v (L.map fstThree eP)
                                        pols  <- getPols eP r v
                                        pols' <- orderByGA pols order
-                                       --SIO.print v
-                                       --SIO.print pols
-                                       --SIO.print pols'
-                                       SIO.writeFile file (draw con (L.map p pols') (k s))
+                                       SIO.writeFile (file ++ "lele") (draw con (L.map p pols') (k s))
+                                       let closer = shrink ([], pols')
+                                       SIO.writeFile file (draw con (L.map p closer) (k s))
                                        return ()
                                 Nothing ->
                                     do SIO.putStrLn "Noup!"
@@ -214,10 +215,6 @@ evalState str s = do a <- parseArgs str s
 
 fstThree :: (a, b, c) -> a
 fstThree (a, b, c) = a 
-
---BORRAR
-fromC :: Container -> [MyPoint]
-fromC c = [(p1x c, p1y c), (p2x c, p1y c), (p2x c, p2y c), (p1x c, p2y c)]
 
 parseArgs :: [String] -> State -> IO (Maybe (Container, Int, Int, Float, String))
 parseArgs [c, m, t, p, s] st = 
@@ -285,10 +282,10 @@ parseSVGFile f s t = do putStrLn $ "Abriendo " ++ f ++ "..."
                                             Po  -> parse po s t
                                             Pl  -> parse pl s t
                                             Pa  -> parse pa s t
-                                            All -> do s'   <- parse r s R
-                                                      s''  <- parse po s' Po
-                                                      s''' <- parse pl s'' Pl
-                                                      parse pa s''' Pa
+                                            All -> do s1 <- parse r s R
+                                                      s2 <- parse po s1 Po
+                                                      s3 <- parse pl s2 Pl
+                                                      parse pa s3 Pa
                         else do putStrLn "*** Error: no es un archivo SVG"
                                 return s
 

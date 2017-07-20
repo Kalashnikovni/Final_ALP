@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+
 module Eval where
 
 -- Módulos propios
@@ -6,16 +8,14 @@ import Common
 -- Módulos prestados
 import Data.List
 import Data.Either
+import Data.Ext
 import Data.Geometry.Point
 import Data.Geometry.LineSegment
-import Data.Ext
 
 import qualified Algorithms.Geometry.LineSegmentIntersection.BentleyOttmann as BO (intersections) 
-import qualified Algorithms.Geometry.LineSegmentIntersection.Naive as N (intersections)
 
-import Graphics.Gloss.Geometry.Line
 import Graphics.Gloss.Data.Vector 
-
+import Graphics.Gloss.Geometry.Line
 
 -- Data Types --
 ----------------
@@ -183,10 +183,11 @@ checkPolSlow p = if check3sides p
 check3sides :: Polygon -> Bool
 check3sides po = length (p po) >= 3
 
---checkIntersections :: Polygon -> [LineSegment 2 () Float] FIXME
+checkIntersections :: Polygon -> Bool
 checkIntersections po = length (BO.intersections (toLSegments (pol ++ [head pol]))) /= length pol
     where pol = p po
 
+toLSegments :: [MyPoint] -> [LineSegment 2 () Float] 
 toLSegments [x]        = [] 
 toLSegments (x:(y:ys)) = (ClosedLineSegment (point2 (fst x) (snd x) :+ ()) (point2 (fst y) (snd y) :+ ())) : (toLSegments (y:ys))
 
