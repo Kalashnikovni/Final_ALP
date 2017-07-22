@@ -202,9 +202,14 @@ evalState str s = do a <- parseArgs str s
                                        r     <- getRotateds v (L.map fstThree eP)
                                        pols  <- getPols eP r v
                                        pols' <- orderByGA pols order
-                                       SIO.writeFile (file ++ "lele") (draw con (L.map p pols') (k s))
                                        let closer = shrink ([], pols')
-                                       SIO.writeFile file (draw con (L.map p closer) (k s))
+                                       --print pols'
+                                       --SIO.putStrLn "**************************************************"
+                                       --print closer
+                                       --SIO.putStrLn "**************************************************"
+                                       --print (pols' == closer)
+                                       SIO.writeFile file (draw con closer (k s))
+                                       --SIO.writeFile (file ++ "2") (draw con (L.map p pols') (k s))
                                        return ()
                                 Nothing ->
                                     do SIO.putStrLn "Noup!"

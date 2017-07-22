@@ -7,8 +7,7 @@ import Common
 
 -- Módulos prestados
 import Data.List
-import Data.Either
-import Data.Ext
+import Data.Ext 
 import Data.Geometry.Point
 import Data.Geometry.LineSegment
 
@@ -17,13 +16,18 @@ import qualified Algorithms.Geometry.LineSegmentIntersection.BentleyOttmann as B
 import Graphics.Gloss.Data.Vector 
 import Graphics.Gloss.Geometry.Line
 
--- Data Types --
-----------------
+-- Definiciones de datos --
+---------------------------
 
-data Quadrant = I | II | III | IV deriving (Eq, Show)
+data Quadrant    = I | II | III | IV deriving (Eq, Show)
 
--- Definitions --
------------------
+isCW CW  = True
+isCW CCW = False
+
+-- Funciones --
+---------------
+
+-- ** Definitions **
 
 evalDefC :: Def -> Container
 evalDefC (Dc c s) = c {p1x = s * p1x c,
@@ -34,12 +38,11 @@ evalDefC (Dc c s) = c {p1x = s * p1x c,
 evalDefP :: Def -> Polygon
 evalDefP (Dp po s) = po {p = map (\(x,y) -> (x * s, y * s)) (p po)} 
 
--- Machine --
--------------
+-- ** Machine **
 
 evalMac :: Machine -> (Containers, Polygons)
 evalMac (Kerf k ds) = let (c, p) = (filter isContainer ds, filter isPolygon ds)
-                      in (map evalDefC c, map (addKerf k (\x -> areaSigned x < 0)) (map evalDefP p))
+                      in (map evalDefC c, map (addKerf k areaSigned) (map evalDefP p))
 
 isContainer :: Def -> Bool
 isContainer (Dc _ _) = True
@@ -49,7 +52,8 @@ isPolygon :: Def -> Bool
 isPolygon (Dp _ _) = True
 isPolygon _          = False
 
-addKerf :: Float -> ([MyPoint] -> Bool) -> Polygon -> Polygon
+-- "Infla" el polígono para considerar el material que saca la máquina de corte
+addKerf :: Float -> ([MyPoint] -> CCW) -> Polygon -> Polygon
 addKerf o f po 
     | length l < 3 = po
     | otherwise    = (newPoints (l ++ [head l])) {pn = pn po}  
@@ -57,8 +61,8 @@ addKerf o f po
           l   = linearize o (ppo ++ [head ppo]) (f ppo) 
 
 -- Obtiene las rectas "offseteadas" correspondientes a cada segmento
-linearize :: Float -> [MyPoint] -> Bool -> [(MyPoint, MyPoint)]
-linearize o (w:(x:ys)) b = offsetLine o w x b : (linearize o (x:ys) b)    
+linearize :: Float -> [MyPoint] -> CCW -> [(MyPoint, MyPoint)]
+linearize o (w:(x:ys)) c = offsetLine o w x c : (linearize o (x:ys) c)    
 linearize _ _ _          = []
 
 newPoints :: [(MyPoint, MyPoint)] -> Polygon
@@ -69,22 +73,22 @@ newPoints (x:(y:zs)) = case intersectLineLine (fst x) (snd x) (fst y) (snd y) of
                         Just pn -> po {p = pn : (p po)} 
     where po = newPoints (y:zs)
 
--- <0 is clockwise, >0 is counter clockwise FIXME 
-areaSigned :: [MyPoint] -> Float
-areaSigned points = sum (zipWith (*) xdiffs ysums)
+-- <0 es horario, >0 es anti horario 
+areaSigned :: [MyPoint] -> CCW--Float
+areaSigned points = if sum (zipWith (*) xdiffs ysums) < 0 then CW else CCW
     where xdiffs = zipWith (-) xs (tail xs ++ [head xs])
           ysums  = zipWith (+) ys (tail ys ++ [head ys])
           xs = map fst points
           ys = map snd points 
 
--- True is clockwise, False is counter clockwise
+-- True es sentido horario, False es sentido antihorario
 -- TODO: justificar por qué si clockwise sumo en tales cuadrantes, y si es counter sumo en los opuestos
-offsetLine :: Float -> MyPoint -> MyPoint -> Bool -> (MyPoint, MyPoint)
-offsetLine o p1 p2 b 
-    | q == I || q == IV = if b 
+offsetLine :: Float -> MyPoint -> MyPoint -> CCW -> (MyPoint, MyPoint)
+offsetLine o p1 p2 c 
+    | q == I || q == IV = if isCW c  
                           then pp
                           else pm 
-    | otherwise         = if b 
+    | otherwise         = if isCW c
                           then pm
                           else pp
     where q     = whichQuadrant p1 p2
@@ -106,8 +110,7 @@ whichQuadrant p1 p2
     | fst p1 > fst p2 && snd p1 >= snd p2 = III
     | otherwise                           = IV 
 
--- SVGFiles --
---------------
+-- ** Archivos SVG **
 
 evalRect :: Rect -> Container
 evalRect r 
@@ -122,6 +125,7 @@ evalRect r
           (x, y)   = applyT1 (0, 0) trh
           (x', y') = applyT1 (w r, h r) trh
 
+-- Aplicación de las diversas transformaciones
 applyT1 :: MyPoint -> Transform -> MyPoint
 applyT1 p (Scale s)                  = applyT1 p (Matrix s 0 0 s 0 0) 
 applyT1 p (SkewX s)                  = applyT1 p (Matrix 1 0 (tan (s * pi / 180)) 1 0 0)
@@ -131,7 +135,7 @@ applyT1 p Thrash                     = p
 
 evalSVGPol :: SVGPolygon -> Float -> Polygon
 evalSVGPol pol k
-    | null (tpo pol) = addKerf k (\x -> areaSigned x < 0) (P {p = po pol, pn = npo pol})
+    | null (tpo pol) = addKerf k areaSigned (P {p = po pol, pn = npo pol})
     | otherwise      = evalSVGPol (pol {po = map (\x -> applyT1 x (head (tpo pol))) (po pol), tpo = tail (tpo pol)}) k
 
 evalPath :: Path -> Float -> Polygon
@@ -156,9 +160,7 @@ evalPathC (L_abs p : ps) _ b     = p : (evalPathC ps p b)
 evalPathC (Complete p : ps) p' b = if b then evalPathC (L_abs p : ps) p' b else evalPathC (L_rel p : ps) p' b
 evalPathC (Z : _) _ _            = []
 
--- Chequeo si los polígonos son válidos --
--- De alguna forma es un "type checker" --
-------------------------------------------
+-- ** Polígonos válidos - Chequeo de tipo **
 
 checkCon :: Container -> Maybe Container
 checkCon c 
@@ -166,6 +168,7 @@ checkCon c
     | p1y c == p2y c = Nothing
     | otherwise      = Just c
 
+-- Chequea si el polígono no se interseca a sí mismo y si tiene más de dos lados
 checkPol :: Polygon -> Maybe Polygon 
 checkPol p = if check3sides p
              then if checkIntersections p 
@@ -173,23 +176,25 @@ checkPol p = if check3sides p
                   else Just p 
              else Nothing
 
+check3sides :: Polygon -> Bool
+check3sides po = length (p po) >= 3
+
+checkIntersections :: Polygon -> Bool
+checkIntersections pol = length (BO.intersections (toLSegments (points ++ [head points]))) /= length points
+    where points = p pol
+
+toLSegments :: [MyPoint] -> [LineSegment 2 () Float] 
+toLSegments [x]        = [] 
+toLSegments (x:(y:ys)) = (ClosedLineSegment (point2 (fst x) (snd x) :+ ()) (point2 (fst y) (snd y) :+ ())) : (toLSegments (y:ys))
+
+-- Chequea si el polígono no se interseca a sí mismo y si tiene más de dos lados
+-- Necesaria por problemas con las funciones del módulo BO
 checkPolSlow :: Polygon -> Maybe Polygon 
 checkPolSlow p = if check3sides p
                  then if checkIntersectionsSlow p 
                       then Nothing
                       else Just p 
                  else Nothing
-
-check3sides :: Polygon -> Bool
-check3sides po = length (p po) >= 3
-
-checkIntersections :: Polygon -> Bool
-checkIntersections po = length (BO.intersections (toLSegments (pol ++ [head pol]))) /= length pol
-    where pol = p po
-
-toLSegments :: [MyPoint] -> [LineSegment 2 () Float] 
-toLSegments [x]        = [] 
-toLSegments (x:(y:ys)) = (ClosedLineSegment (point2 (fst x) (snd x) :+ ()) (point2 (fst y) (snd y) :+ ())) : (toLSegments (y:ys))
 
 checkIntersectionsSlow :: Polygon -> Bool
 checkIntersectionsSlow po = cIS (getSegs (p po ++ [head (p po)])) 
@@ -198,6 +203,7 @@ cIS :: [(MyPoint, MyPoint)] -> Bool
 cIS []     = False
 cIS (x:xs) = Eval.compare x xs || cIS xs
 
+-- Chequea si las proyecciones en el eje de las ordenadas y las abscisas se intersecan
 compare :: (MyPoint, MyPoint) -> [(MyPoint, MyPoint)] -> Bool
 compare x []     = False
 compare x (y:ys) = case intersectSegSeg (fst x) (snd x) (fst y) (snd y) of
@@ -210,5 +216,4 @@ compare x (y:ys) = case intersectSegSeg (fst x) (snd x) (fst y) (snd y) of
 getSegs :: [MyPoint] -> [(MyPoint, MyPoint)]
 getSegs [x]        = []
 getSegs (x:(y:ys)) = (x,y) : (getSegs (y:ys))
-
 
