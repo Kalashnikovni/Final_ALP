@@ -71,17 +71,6 @@ rotatePoints p r = map (\(x,y) -> (c * x - s * y, c * y + s * x)) p
     where c = cos r
           s = sin r
 
-{-rotate :: Containers -> Polygons -> Polygons
-rotate _ []       = []
-rotate cs (po:ps) = case c' of
-                        Just v ->
-                            (po {p = rotatePoints (p po) (pi / 2)}) : (Polygons.rotate (delete v cs) ps) 
-                        Nothing ->
-                            []
-    where c' = find (\x -> nc x == pn po) cs 
--}
-
-
 -- Sacamos los rectángulos y ponemos los polígonos --
 -----------------------------------------------------
 
@@ -184,27 +173,3 @@ distLines p1 p2 p3 p4 = case intersectLineLine p1 p2 p3 p4 of
           c2 = m * fst p3 - snd p3 -- snd p3 - m * fst p3 FIXME chequear cuál está bien
           m  = (snd p2 - snd p1) / (fst p2 - fst p1)
           --b  = 1
-
-
-
--- Rotación alrededor del centroide --
---------------------------------------
-
-{-centroid :: Polygon -> MyPoint
-centroid pol = ((1/(6 * a)) * sumCoord points fst, (1/(6 * a)) * sumCoord points snd) 
-    where points = p pol
-          a      = 1/2 * (areaSigned (points ++ [head points]))
-
-areaSigned :: [MyPoint] -> Float
-areaSigned [p1, p2]       = fst p1 * snd p2 - fst p2 * snd p1
-areaSigned (x:(y:(z:zs))) = (fst x * snd y - fst y * snd x) + areaSigned (y:(z:zs))
-
-sumCoord :: [MyPoint] -> ((Float, Float) -> Float) -> Float
-sumCoord [p1, p2] f       = (f p1 + f p2) * (fst p1 * snd p2 - fst p2 * snd p1)
-sumCoord (x:(y:(z:zs))) f = (f x + f y) * (fst x * snd y - fst y * snd x) + sumCoord (y:(z:zs)) f
-
-rotate90Centroid :: Polygon -> Polygon
-rotate90Centroid pol = pol {p = map (\(x,y) -> (x + cx, y + cy)) (rotatePoints (map (\(x,y) -> (x - cx, y - cy)) (p pol)) (pi / 2))}
-    where cx = fst (centroid pol)
-          cy = snd (centroid pol)
--}
