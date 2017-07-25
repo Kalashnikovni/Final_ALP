@@ -6,6 +6,9 @@ import Common
 -- Módulos prestados
 import Text.PrettyPrint.HughesPJ as PJ
 
+-- Funciones --
+---------------
+
 printContainer :: Container -> Doc
 printContainer c = text ((nc c) ++ " ") <>
                    parens (int (rid c)) <>

@@ -13,15 +13,18 @@ import Data.List
 
 import Graphics.Gloss.Geometry.Line (intersectSegSeg, intersectLineLine)
 
-type Order = Int
+-- Definición de tipos de datos --
+----------------------------------
 
--- Embeber los polígonos en rectángulos -- 
-------------------------------------------
+type Order = Int
 
 rCons = 16 :: Float
 
+-- Funciones -- 
+---------------
+
 -- Devuelve los puntos del poligono como si el eje estuviera definido por el p1 del contenedor
--- Contenedor, polígono con eje en el container, polígono rotado con el eje en el container
+-- Las tripletas representan: Contenedor, polígono con eje en el container, polígono rotado con el eje en el container
 embedPols :: Polygons -> [(Container, Polygon, Polygon)]
 embedPols []      = []
 embedPols (po:ps) = (a {rid = length ps}, b, c) : (embedPols ps)
@@ -71,8 +74,7 @@ rotatePoints p r = map (\(x,y) -> (c * x - s * y, c * y + s * x)) p
     where c = cos r
           s = sin r
 
--- Sacamos los rectángulos y ponemos los polígonos --
------------------------------------------------------
+-- ** Sacamos los rectángulos y ponemos los polígonos **
 
 -- El polígono actual a introducir
 -- Containers rotados
@@ -99,7 +101,6 @@ orderByGA ps (x:xs) = do res <- orderByGA ps xs
 -- Primero necesito saber cuáles rectángulos fueron rotados
 -- Rectángulos nuevos
 -- Rectángulos originales
---getRotateds :: Containers -> Containers -> IO Containers
 getRotateds :: Containers -> Containers -> IO [Int]
 getRotateds [] _      = return []
 getRotateds (x:xs) ys = case compareCons x ys of
@@ -116,60 +117,3 @@ compareCons x (y:ys) = if isSame x y
 isSame :: Container -> Container -> Bool
 isSame c1 c2 = rid c1 == rid c2 && abs (widthR c1 - heightR c2) <= 0.001 && abs (heightR c1 - widthR c2) <= 0.001 
 
--- Etapa de shrink --
----------------------
--- True si hay intersecciones, False en caso contrario
-polygonCutA :: Polygon -> Polygon -> Bool
-polygonCutA p1 p2 = sidesIntersections (getSides (p p1)) (getSides (p p2))
-    
-getSides :: [MyPoint] -> [(MyPoint, MyPoint)]
-getSides (x:(y:ys)) = (x, y) : (getSides (y:ys))  
-getSides _          = []
-
-sidesIntersections :: [(MyPoint, MyPoint)] -> [(MyPoint, MyPoint)] -> Bool
-sidesIntersections [] _      = False
-sidesIntersections (x:xs) ys = or (map (\y -> case intersectSegSeg (fst x) (snd x) (fst y) (snd y) of
-                                                 Just v -> 
-                                                    if v /= (fst x) && v /= (snd x) 
-                                                    then True
-                                                    else False
-                                                 _      -> if coincidentSides (fst x) (snd x) (fst y) (snd y)
-                                                           then True
-                                                           else False) ys) 
-                               || sidesIntersections xs ys 
-
-coincidentSides :: MyPoint -> MyPoint -> MyPoint -> MyPoint -> Bool
-coincidentSides p1 p2 p3 p4
-    | (y2 - y1) / (x2 - x1) == (y4 - y3) / (x4 - x3) = if distLines p1 p2 p3 p4 == Just 0 &&
-                                                          intersectIntervals (fst p1, fst p2) (fst p3, fst p4)
-                                                       then True
-                                                       else False
-    | otherwise                                      = False 
-    where x1 = fst p1
-          x2 = fst p2
-          x3 = fst p3
-          x4 = fst p4
-          y1 = snd p1
-          y2 = snd p2
-          y3 = snd p3
-          y4 = snd p4
-
-intersectIntervals :: MyPoint -> MyPoint -> Bool
-intersectIntervals a b = (b1 < a1 && a1 < b2) || (b2 < a1 && a1 < b1) || (b1 < a2 && a2 < b2) || (b2 < a2 && a2 < b1) ||
-                         (a1 < b1 && a2 > b2) || (a1 < b2 && a2 > b1) || (b1 < a1 && b2 > a2) || (b1 < a2 && b2 > a1) 
-    where a1 = fst a
-          a2 = snd a
-          b1 = fst b
-          b2 = snd b
-
--- Las lineas argumento deben ser paralelas
-distLines :: MyPoint -> MyPoint -> MyPoint -> MyPoint -> Maybe Float
-distLines p1 p2 p3 p4 = case intersectLineLine p1 p2 p3 p4 of
-                            Nothing -> if fst p1 /= fst p2 
-                                       then Just $ abs (c2 - c1) / sqrt (m * m + 1) -- m * m + b * b FIXME
-                                       else Just $ abs (fst p1 - fst p3)
-                            _       -> Nothing
-    where c1 = m * fst p1 - snd p1 -- snd p1 - m * fst p1 FIXME chequear cuál está bien
-          c2 = m * fst p3 - snd p3 -- snd p3 - m * fst p3 FIXME chequear cuál está bien
-          m  = (snd p2 - snd p1) / (fst p2 - fst p1)
-          --b  = 1

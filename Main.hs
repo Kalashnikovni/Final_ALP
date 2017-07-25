@@ -38,8 +38,8 @@ import System.Console.Readline
 import System.Directory (doesFileExist)
 
 
--- Data definitions --
-----------------------
+-- Definiciones de datos --
+---------------------------
 
 data Command = Help
              | Browse
@@ -63,10 +63,10 @@ data Search  = R -- Rectangle
                | All -- Everything 
             deriving Show 
 
-data State   = S { k :: Float, nuc :: Int, sc :: Set Container, sp :: Polygons } --deriving Show
+data State   = S { k :: Float, nuc :: Int, sc :: Set Container, sp :: Polygons } deriving Show
 
--- Code --
-----------
+-- Funciones --
+---------------
 
 main :: IO ()
 main = do printHello
@@ -178,18 +178,18 @@ getHelp :: InteractiveCommand -> String
 getHelp (Cmd _ _ _ h) = h
 
 printEnv :: State -> IO ()
-printEnv s = do putStr "Kerf: "
+printEnv s = do putStrLn "\n************************************************************************"
+                putStr "Kerf: "
                 print (k s)
                 putStrLn ""
                 putStrLn "Contenedores: "
                 putStrLn (PJ.render (printContainers (toList (sc s))))
                 putStrLn "Polígonos: "
-                putStrLn (PJ.render (printPolygons (sp s)))
+                putStr (PJ.render (printPolygons (sp s)))
+                putStrLn "************************************************************************\n"
 
--- Comando :d --
-----------------                
+-- ** Comando :d **
  
--- FIXME: no container defined
 evalState :: [String] -> State -> IO ()  
 evalState str s = do a <- parseArgs str s
                      case a of 
@@ -203,16 +203,10 @@ evalState str s = do a <- parseArgs str s
                                        pols  <- getPols eP r v
                                        pols' <- orderByGA pols order
                                        let closer = shrink ([], pols')
-                                       --print pols'
-                                       --SIO.putStrLn "**************************************************"
-                                       --print closer
-                                       --SIO.putStrLn "**************************************************"
-                                       --print (pols' == closer)
                                        SIO.writeFile file (draw con closer (k s))
-                                       --SIO.writeFile (file ++ "2") (draw con (L.map p pols') (k s))
                                        return ()
                                 Nothing ->
-                                    do SIO.putStrLn "Noup!"
+                                    do SIO.putStrLn "\nLas figuras especificadas no entran en el contenedor"
                                        print con
                                        return ()
                         _                    -> 
@@ -221,6 +215,7 @@ evalState str s = do a <- parseArgs str s
 fstThree :: (a, b, c) -> a
 fstThree (a, b, c) = a 
 
+-- No se permite repetir nombre de archivos para no sobreescribir algún archivo que sirva como fuente
 parseArgs :: [String] -> State -> IO (Maybe (Container, Int, Int, Float, String))
 parseArgs [c, m, t, p, s] st = 
     case reads c :: [(Int, String)] of
@@ -257,8 +252,7 @@ printiarg = do SIO.putStrLn invalidarg
 
 invalidarg = "\nArgumento inválido, por favor reintente\n"
 
--- Parsing de archivos --
--------------------------
+-- ** Parsing de archivos **
 
 parseSVGFiles :: [String] -> State -> Search -> IO State
 parseSVGFiles [] s _     = return s
@@ -355,8 +349,7 @@ getKerf (Kerf k _) = k
 setKerf :: Machine -> Float -> Machine
 setKerf (Kerf _ ds) k = Kerf k ds  
 
--- Chequeo de tipos --
-----------------------
+-- ** Chequeo de tipos **
 
 checkKerf :: Float -> State -> IO State
 checkKerf v s = if v >= 0
@@ -389,10 +382,7 @@ checkPols ps s f = if L.null n
     where (j, n) = sepJN ps f 
           res    = return (s {sp = sp s ++ j})
 
--- El lado izquierdo son los polígonos legales
+-- El lado izquierdo son los polígonos "legales"
 sepJN :: [a] -> (a -> Maybe a) -> ([a], [a])
-sepJN []     f = ([], [])
-sepJN (x:xs) f = case f x of
-                    Just v  -> (v : (fst s'), snd s') 
-                    Nothing -> (fst s', x : (snd s'))
-    where s' = sepJN xs f
+sepJN xs f = ([y | y <- L.filter (isJust . f) xs], [y | y <- L.filter (isNothing . f) xs])
+

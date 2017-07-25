@@ -41,6 +41,7 @@ areaR r = heightR r * widthR r
 -- COMIENZO de BL algorithm --
 ------------------------------
 
+-- El segundo argumento es el contenedor
 -- El tercer argumento es la lista de rectángulos ya acomodados
 blAlgorithm :: Containers -> Container -> Containers -> Containers 
 blAlgorithm []       c lr = []
@@ -59,6 +60,7 @@ rLeft r c lr = if r == sl
                else rBottom sl c lr
     where sl = shiftLeft r c lr
 
+-- Coloca el rectángulo en la posición inicial
 -- El segundo argumento es el contenedor
 placeRightTop :: Container -> Container -> Container 
 placeRightTop r c = C {p1x = x - widthR r,
@@ -92,11 +94,14 @@ by2ypos r1 r2 = if y1 > y2
     where y1 = p2y r1
           y2 = p2y r2
 
+-- Busca los rectángulos presentes dentro de área rectangular dada
 -- El segundo argumento es el area "de movimiento"
 rsWithin :: Container -> Containers -> Containers
 rsWithin m lr = filter (\lre -> not ((p2x m < p1x lre) || (p2y m < p1y lre) 
                                  || (p2x lre < p1x m) || (p2y lre < p1y m))) lr
 
+-- El segundo argumento es el contenedor
+-- El tercer argumento es una lista de los rectángulos ya acomodados
 shiftLeft :: Container -> Container -> [Container] -> Container
 shiftLeft r c lr = let m = C {p1x = p1x c,
                               p1y = p1y r,
@@ -123,6 +128,13 @@ by2xpos r1 r2 = if x1 > x2 then GT else
 -------------------------------------
 
 newtype Con = Con (Containers, Container, Float)
+
+-- Chequeo si efectivamente todos los rectángulos se encuentran dentro del contenedor
+-- El segundo argumento es el contenedor
+checkInside :: Container -> Container -> Bool
+checkInside r c = if p1x r >= p1x c && p1y r >= p1y c && p2x r <= p2x c && p2y r <= p2y c
+                  then True
+                  else False
 
 geneticAlgorithm :: Containers -> Container -> Int -> Int -> Float -> Maybe Containers 
 geneticAlgorithm lr c m t pm 
@@ -160,15 +172,26 @@ instance Chromosome Con where
 
     fitness (Con (cs, c, pm)) = float2Double (fitnessFunction cs c) 
 
--- Chequeo si efectivamente todos los rectángulos se encuentran dentro del contenedor
--- El segundo argumento es el contenedor
-checkInside :: Container -> Container -> Bool
-checkInside r c = if p1x r >= p1x c && p1y r >= p1y c && p2x r <= p2x c && p2y r <= p2y c
-                  then True
-                  else False 
+mut [] _      = return []
+mut (l:lr) pm = do p   <- getRandomR (0.0, 1.0)
+                   res <- mut lr pm
+                   return ((if p < pm
+                            then rotate90 l
+                            else l) : res) 
 
-sortR :: Containers -> Containers
-sortR lr = sortBy compareWidthR lr
+rotate90 :: Container -> Container
+rotate90 r = C {p1x = x,
+                p1y = y,
+                p2x = x + heightR r,
+                p2y = y + widthR r,
+                rid = rid r,
+                nc  = nc r} 
+    where x = p1x r
+          y = p1y r
+
+-- Se asume que x < y
+swap :: Int -> Int -> [a] -> [a]
+swap x y xs = (take x xs) ++ [xs !! y] ++ take (y - x - 1) (drop (x + 1) xs) ++ [xs !! x] ++ take (length xs - y) (drop (y + 1) xs)   
 
 fitnessFunction :: Containers -> Container -> Float
 fitnessFunction lr c = sum (map areaR (ff lr c' \\ lr)) + areaR c - areaR c'  
@@ -186,6 +209,9 @@ ff lr c = up ++ (filter (\x -> and (map (\y -> null (rsWithin x [y])) up)) right
     where up    = (upR (sortR lr) c lr) \\ lr
           right = (rightR lr  c lr) \\ lr
 
+sortR :: Containers -> Containers
+sortR lr = sortBy compareWidthR lr
+
 upR :: Containers -> Container -> Containers -> Containers
 upR [] _ all       = all
 upR (l : lr) c all = upR lr c ((if null above then [up] else c_u) ++ all)  
@@ -193,14 +219,6 @@ upR (l : lr) c all = upR lr c ((if null above then [up] else c_u) ++ all)
           above    = filter (\x -> p1x x /= p2x l && p1x l /= p2x x && x /= l) (rsWithin up all)
           (m1, m2) = coverUp above
           c_u      = if minus (p2x l) m2 == 0 then [] else [up {p1x = m2}]  
-
-rightR :: Containers -> Container -> Containers -> Containers
-rightR [] _ all       = all
-rightR (l : lr) c all = rightR lr c ((if null side then [right] else c_r) ++ all)  
-    where right    = getRight l c
-          side     = filter (\x -> p1y x /= p2y l && p1y l /= p2y x && x /= l) (rsWithin right all)
-          (m1, m2) = coverRight side
-          c_r      = if minus (p2y l) m2 == 0 then [] else [right {p1y = m2}]  
 
 getUp :: Container -> Container -> Container
 getUp r c = C {p1x = p1x r,
@@ -210,6 +228,21 @@ getUp r c = C {p1x = p1x r,
                rid = -1,
                nc  = ""}
 
+coverUp :: Containers -> (Float, Float)
+coverUp []               = (0, 0)
+coverUp [l]              = (p1x l, p2x l)
+coverUp (l1 : (l2 : lr)) = if x1 <= b then (min a x1, max b (p2x l1)) else (a, b) 
+    where (a, b) = coverUp (l2 : lr)
+          x1     = p1x l1
+
+rightR :: Containers -> Container -> Containers -> Containers
+rightR [] _ all       = all
+rightR (l : lr) c all = rightR lr c ((if null side then [right] else c_r) ++ all)  
+    where right    = getRight l c
+          side     = filter (\x -> p1y x /= p2y l && p1y l /= p2y x && x /= l) (rsWithin right all)
+          (m1, m2) = coverRight side
+          c_r      = if minus (p2y l) m2 == 0 then [] else [right {p1y = m2}]  
+
 getRight :: Container -> Container -> Container
 getRight r c = C {p1x = p2x r, 
                   p1y = p1y r,
@@ -218,12 +251,6 @@ getRight r c = C {p1x = p2x r,
                   rid = -1,
                   nc  = ""}
 
-coverUp :: Containers -> (Float, Float)
-coverUp []               = (0, 0)
-coverUp [l]              = (p1x l, p2x l)
-coverUp (l1 : (l2 : lr)) = if x1 <= b then (min a x1, max b (p2x l1)) else (a, b) 
-    where (a, b) = coverUp (l2 : lr)
-          x1     = p1x l1
 
 coverRight :: Containers -> (Float, Float)
 coverRight []               = (0, 0)
@@ -236,27 +263,6 @@ minus :: Float -> Float -> Float
 minus x y 
     | x > y     = x - y
     | otherwise = 0
-
-mut [] _      = return []
-mut (l:lr) pm = do p   <- getRandomR (0.0, 1.0)
-                   res <- mut lr pm
-                   return ((if p < pm
-                            then rotate90 l
-                            else l) : res) 
-
--- Se asume que x < y
-swap :: Int -> Int -> [a] -> [a]
-swap x y xs = (take x xs) ++ [xs !! y] ++ take (y - x - 1) (drop (x + 1) xs) ++ [xs !! x] ++ take (length xs - y) (drop (y + 1) xs)   
-
-rotate90 :: Container -> Container
-rotate90 r = C {p1x = x,
-                p1y = y,
-                p2x = x + heightR r,
-                p2y = y + widthR r,
-                rid = rid r,
-                nc  = nc r} 
-    where x = p1x r
-          y = p1y r
 
 --------------------------------
 -- FIN del algoritmo genético --
