@@ -2,23 +2,8 @@
 \documentclass[a4paper,10pt]{article}
 \usepackage[utf8]{inputenc}
 \usepackage{textcomp}
-\usepackage{stmaryrd}
-\usepackage{listings}
-\lstset{literate=%
-                 {á}{{\'a}}1
-                 {ã}{{\~a}}1
-                 {é}{{\'e}}1
-                 {ó}{{\'o}}1
-                 {í}{{\'i}}1
-                 {ñ}{{\~n}}1
-                 {¡}{{!`}}1
-                 {¿}{{?`}}1
-                 {ú}{{\'u}}1
-                 {Í}{{\'I}}1
-                 {Ó}{{\'O}}1
-       }
-\usepackage{bussproofs}
-\usepackage[english]{babel}
+\usepackage{tasks}
+\usepackage[spanish]{babel}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage[margin=1in]{geometry}
@@ -36,9 +21,8 @@
 
 \title{
     \begin{center}
-        \includegraphics[width=6cm, height=6cm]{logo-unr.png}
+    \includegraphics[width=6cm, height=6cm]{logo-unr.png}
     \end{center}
-
     \Huge \textsc{{\bfseries T}rabajo {\bfseries P}ráctico {\bfseries F}inal} \\
     \Huge \textsc{Bin packing de polígonos simples} \\
     \large \textsc{Análisis de lenguajes de programación} \\
@@ -70,60 +54,399 @@ Juan Martín Rabasedas
 
 \end{center}
 
+\large
 \newpage{}
 
-\section*{Sintaxis abstracta}
+\section*{Definiendo el problema}
+
+\textit {Motivación}
+
+    \smallskip
+    Dada una plancha de madera de un ancho \textit{A} y largo \textit{L}, en los aserraderos tan solo se
+    realizan cortes longitudinales o transversales de la misma para la venta al público. Por este motivo es
+    necesario que el cliente que se acerca a realizar su compra minimice el "área rectangular" que ocuparán
+    las figuras con las cuales luego trabajará. Al hablar de área rectangular se hace referencia al área del 
+    rectángulo de menor área que contiene a todas las figuras dadas por el cliente.
+
+\medskip
+\textit {Consideraciones}
+
+    \smallskip
+    \begin{itemize}
+        \item No se trabajará con figuras arbitrarias, sino que simplificará el problema considerando tan solo
+    polígonos simples; es decir, polígonos cuyos lados no adyacentes no se intersecan (ya que el caso de
+    polígonos complejos puede reducirse a un problema de bin packing de polígonos simples). Por
+    otro lado, la elección de polígonos como elementos de trabajo se basa en la posibilidad de chequear
+    fácilmente si un par de ellos se encuentran solapados o no (es decir, si hay intersección entre sus lados).
+        \item Si bien en el caso real se cuentan con varias planchas del mismo tamaño (con lo cual si las
+    figuras no caben en una sola de ellas se utilizan las restantes), aquí se determina si se pueden acomodar
+    todas las figuras dentro de una única plancha, devolviendo la correspondiente solución o bien un error.
+        \item Se tiene en cuenta el material que quitará la herramienta de corte del cliente al cortar cada
+    polígono, dado por el espesor y el tipo de la herramienta. A este valor se le denomina "kerf". 
+    \end{itemize}
+
+\section*{Instalación}
+
+\smallskip
+    Los módulos de Haskell que deben estar instalados son los siguientes:
+
 \normalsize
+\begin{tasks}(3)
+    \task[+] AI.GeneticAlgorithm.Simple
+    \task[+] Algorithms.Geometry
+    \task[+] Control.DeepSeq
+    \task[+] Control.Exception
+    \task[+] Control.Lens
+    \task[+] Control.Monad
+    \task[+] Data.ByteString
+    \task[+] Data.Char
+    \task[+] Data.Ext
+    \task[+] Data.Geometry
+    \task[+] Data.List
+    \task[+] Data.Maybe
+    \task[+] Data.Set
+    \task[+] Data.String
+    \task[+] Data.Text
+    \task[+] GHC.Float
+    \task[+] Graphics.Gloss
+    \task[+] System.Console.Readline
+    \task[+] System.Directory
+    \task[+] System.Environment
+    \task[+] System.IO
+    \task[+] System.Random
+    \task[+] Text.Blaze
+    \task[+] Text.PrettyPrint.HughesPJ
+    \task[+] Text.XmlHtml
+\end{tasks}
+
+\large
+    Para hacer uso del software tan solo es necesario compilar el archivo Main.hs con ghc, y ejecutar el
+    ejecutable generado a partir de dicha compilación.  
+
+\section*{Organización de los archivos}
+\begin{itemize}
+    \item \textit{Common.hs}: en este archivo se encuentran las definiciones de tipos de datos referidos a
+    polígonos, rectángulos, máquina (que es un conjunto de polígonos y rectángulos junto con el kerf), y tipos
+    de datos para los elementos pertinentes de archivos SVG.
+    \item \textit{Draw.hs}: aquí se encuentran las funciones encargadas de crear el texto que conformará el
+    archivo SVG que se devuelve como resultado.
+\end{itemize}
+
+\subsection*{DSL de "máquinas"}
+\setlength{\leftskip}{0.4cm}{
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+\subsubsection*{Sintaxis abstracta}
+\large
 
 \textit
-$<$IntExp$>$ ::=
+$<$floatExp$>$ ::=
 
     \setlength{\leftskip}{0.5cm}
-    $<$Nat$>$
+    $<$float$>$
 
-    $| -_{1}<$IntExp$>$
-
-    $| <$IntExp$>$ + $<$IntExp$>$ 
-
-    $| <$IntExp$>  -_{2} <$IntExp$>$ 
-
-    $| <$IntExp$>$ $\times$ $<$IntExp$>$ 
-
-    $| <$IntExp$>$ $/$ $<$IntExp$>$ 
-    
-    \setlength{\leftskip}{0cm}
-
-\medskip
-$<$FloatExp$>$ ::= $<$IntExp$>$ . $<$Nat$>$
-
-\medskip
-$<$FloatList$>$ ::=
-
-    \setlength{\leftskip}{0.5cm}
-    $<$empty$>$
-
-    $| <$FloatExp$>$ : $<$FloatList$>$
+    $| -_{1} <$float$>$
 
     \setlength{\leftskip}{0cm}
 
 \medskip
-$<$Polygon$>$ ::= $<$FloatExp$>$ : $<$FloatExp$>$ : $<$FloatExp$>$ : $<$FloatList$>$
+$<$point$>$ ::= $<$floatExp$>$ $\sim$ $<$floatExp$>$
 
 \medskip
-$<$Container$>$ ::= {\bfseries p1} $<$FloatExp$>$ , $<$FloatExp$>$ {\bfseries p2} $<$FloatExp$>$ , $<$FloatExp$>$ 
+$<$polygon$>$ ::=
+
+    \setlength{\leftskip}{0.5cm}
+    $<$point$>$
+
+    $| <$point$>$ , $<$polygon$>$
+
+    \setlength{\leftskip}{0cm}
 
 \medskip
-$<$PolygonList$>$ ::=
+$<$container$>$ ::= $<$float$>$ $\times$ $<$float$>$
+
+\medskip
+$<$defExp$>$ ::= {\bfseries pol} $<$name$>$ = $<$polygon$>$ 
+
+    \setlength{\leftskip}{0.5cm}
+    $|$ {\bfseries con} $<$name$>$ = $<$container$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$defs$>$ ::=
     
     \setlength{\leftskip}{0.5cm}
     $<$empty$>$
 
-    $| <$Polygon$>$ : $<$PolygonList$>$
+    $| <$defExp$>$ $<$defs$>$
+
+    $|$ {\bfseries pol} $<$name$>$ = $<$polygon$>$ {\bfseries copy} $<$natural$>$ {\bfseries scale}
+    $<$float$>$ $<$defs$>$
+
+    $|$ {\bfseries con} $<$name$>$ = $<$container$>$ {\bfseries copy} $<$natural$>$ {\bfseries scale}
+    $<$float$>$ $<$defs$>$
 
     \setlength{\leftskip}{0cm}
+
+\medskip
+$<$machine$>$ ::= {\bfseries kerf} $<$float$>$ $<$defs$>$
 
 \normalfont
 
-\section*{Sintaxis concreta}
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+\subsubsection*{Sintaxis concreta}
+
+\textit
+$<$digit$>$ ::= '0' $|$ '1' $|$ ... $|$ '9'
+
+\medskip
+$<$natural$>$ ::=
+
+    \setlength{\leftskip}{0.5cm}
+    $<$digit$>$ 
+
+    $| <$digit$> <$natural$>$ 
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$float$>$ ::= $<$natural$>$ '.' $<$natural$>$ 
+
+\medskip
+$<$floatExp$>$ ::=
+
+    \setlength{\leftskip}{0.5cm}
+    $<$float$>$
+
+    $|$ '-' $<$float$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$point$>$ ::= $<$floatExp$>$ '$\sim$' $<$floatExp$>$
+
+\medskip
+$<$polygon$>$ ::=
+
+    \setlength{\leftskip}{0.5cm}
+    $<$point$>$
+
+    $| <$point$>$ ',' $<$polygon$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$bPolygon$>$ ::=
+
+    \setlength{\leftskip}{0.5cm}
+    '[' ']'
+
+    $|$ '[' $<$polygon$>$ ']'
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$container$>$ ::= $<$float$>$ '$\times$' $<$float$>$
+
+\medskip
+$<$defExp$>$ ::= {\bfseries 'pdef'} $<$name$>$ '=' $<$bPolygon$>$ 
+
+    \setlength{\leftskip}{0.5cm}
+    $|$ {\bfseries 'con'} $<$name$>$ '=' $<$container$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$defs$>$ ::=
+    
+    \setlength{\leftskip}{0.5cm}
+    $<$empty$>$
+
+    $| <$defExp$>$ $<$defs$>$
+
+    $|$ {\bfseries 'pdef'} $<$name$>$ = $<$bPolygon$>$ {\bfseries 'copy'} $<$natural$>$ {\bfseries 'scale'}
+    $<$float$>$ $<$defs$>$
+
+    $|$ {\bfseries 'cdef'} $<$name$>$ = $<$container$>$ {\bfseries 'copy'} $<$natural$>$ {\bfseries 'scale'}
+    $<$float$>$ $<$defs$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$machine$>$ ::= {\bfseries 'kerf'} $<$float$>$ $<$defs$>$
+}
+
+\subsection*{DSL de SVG}
+\setlength{\leftskip}{0.4cm}{
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+
+    SVG cuenta con varios tipos de elementos que describen distintas figuras; los elementos que pueden
+    resultar de interés para este trabajo son los siguientes: $<$rect$>$, $<$polygon$>$, $<$polyline$>$ y
+    $<$path$>$. Se utilizó el módulo Text.XmlHtml para obtener los elementos que son de importancia para
+    el objetivo planteado (por ejemplo: la rotación de una figura no es relevante), con lo cual luego dicho
+    resultado debe ser parseado. A continuación se listan los campos relevantes de cada elemento, en el orden
+    en que serán pasados al parser:
+
+    \begin{itemize}
+        \item $<$rect$>$: width, height, transform,  id. A este elemento solo se le permiten las
+        transformaciones de translación, rotación o escalamiento (ya que transformaciones arbitrarias pueden
+        dar como resultado otro tipo de cuadriláteros que no son rectángulos).
+        \item $<$polygon$>$: points, transform,  id.
+        \item $<$polyline$>$: points, transform,  id.
+        \item $<$path$>$: d, transform,  id.
+    \end{itemize}
+
+    Para más detalles acerca de la sintaxis de dicho lenguaje ver las referencias.
+
+\subsubsection*{Sintaxis abstracta}
+
+\textit
+$<$floatExp$>$ ::=
+
+    \setlength{\leftskip}{0.5cm}
+    $<$float$>$
+
+    $| -_{1} <$float$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$rectList$>$ ::= 
+
+    \setlength{\leftskip}{0.5cm}
+    $<$empty$>$
+
+    $|$ {\bfseries translate} $<$floatExp$>$ $<$rectList$>$
+
+    $|$ {\bfseries translate} $<$cPoint$>$ $<$rectList$>$
+
+    $|$ {\bfseries rotate} $<$floatExp$>$ $<$rectList$>$
+
+    $|$ {\bfseries scale} $<$floatExp$>$ $<$rectList$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$sufixR$>$ ::= $<$rectList$>$ $<$name$>$
+
+\medskip
+$<$rect$>$ ::= $<$floatExp$>$ $<$floatExp$>$ $<$sufixR$>$
+
+\medskip
+$<$point$>$ ::= 
+
+    \setlength{\leftskip}{0.5cm}
+    $<$floatExp$>$ {\bfseries space} $<$floatExp$>$
+
+    $|$ cPoint
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$pointList$>$ ::= 
+
+    \setlength{\leftskip}{0.5cm}
+    $<$empty$>$
+
+    $| <$point$>$ $<$pointList$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$transform$>$ ::= 
+
+    \setlength{\leftskip}{0.5cm}
+    $<$translate$>$ $<$floatExp$>$
+
+    $|$ {\bfseries translate} $<$floatExp$>$ $<$cPoint$>$
+
+    $|$ {\bfseries translate} $<$cPoint$>$ $<$rectList$>$
+
+    $|$ {\bfseries rotate} $<$floatExp$>$
+
+    $|$ {\bfseries scale} $<$floatExp$>$
+
+    $|$ {\bfseries skewX} $<$floatExp$>$
+
+    $|$ {\bfseries skewY} $<$floatExp$>$
+    
+    $|$ {\bfseries matrix} $<$floatExp$>$ , $<$floatExp$>$ , $<$floatExp$>$ , $<$floatExp$>$ , $<$floatExp$>$
+    , $<$floatExp$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$transformList$>$ ::= 
+
+    \setlength{\leftskip}{0.5cm}
+    $<$empty$>$
+
+    $| <$transform$>$ $<$transformList$>$
+
+    \setlength{\leftskip}{0cm}
+
+\medskip
+$<$sufix$>$ ::= $<$transformList$>$ $<$name$>$
+
+\medskip
+$<$polygon$>$ ::= $<$pointList$>$ $<$sufix$>$
+
+\medskip
+$<$polyline$>$ ::= {\bfseries poly} $<$pointList$>$ $<$sufix$>$
+
+\medskip
+$<$startPath$>$ ::= 
+
+    \setlength{\leftskip}{0.5cm}
+    {\bfseries M} $<$point$>$ $<$pathL$>$
+
+    $|$ {\bfseries m} $<$point$>$ $<$pathL$>$
+
+    \setlength{\leftskip}{0cm}
+    
+\medskip
+$<$pathL$>$ ::= 
+
+    \setlength{\leftskip}{0.5cm}
+    
+    {\bfseries h} $<$floatExp$>$ $<$pathL$>$
+
+    $|$ {\bfseries H} $<$floatExp$>$ $<$pathL$>$
+
+    $|$ {\bfseries v} $<$floatExp$>$ $<$pathL$>$
+
+    $|$ {\bfseries V} $<$floatExp$>$ $<$pathL$>$
+
+    $|$ {\bfseries l} $<$point$>$ $<$pathL$>$
+
+    $|$ {\bfseries L} $<$point$>$ $<$pathL$>$
+
+    $|$ $<$point$>$ $<$pathL$>$
+
+    $|$ {\bfseries z}
+
+    \setlength{\leftskip}{0cm}
+
+}
+
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+\newpage{}
+\begin{thebibliography}{9}
+
+\bibitem{lamport94}
+    Leslie Lamport,
+    \textit{\LaTeX: a document preparation system},
+    Addison Wesley, Massachusetts,
+    2nd edition,
+    1994.
+\end{thebibliography}
 
 \end{document}

@@ -24,8 +24,8 @@ import Text.Blaze.Svg11 as S
 import Text.Blaze.Svg11.Attributes as A
 import Text.Blaze.Svg.Renderer.Pretty
 
--- Definición de constantes --
-------------------------------
+-- Definiciones de constantes --
+--------------------------------
 
 margin = 10
 

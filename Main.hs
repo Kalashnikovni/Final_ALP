@@ -1,3 +1,8 @@
+-- =========================================== --
+-- ===   Denise Marzorati - FCEIA - 2017   === --
+-- ===== Módulo principal - "Intérprete" ===== --
+-- =========================================== --
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -27,19 +32,17 @@ import Data.Set as Set
 import Data.String as S
 import Data.Text as T (unpack, append)
 
-import Graphics.SVG.ReadPath
-
 import Text.PrettyPrint.HughesPJ as PJ (render, float)
 import Text.XmlHtml as XML
 
-import System.IO as SIO
-import System.Environment
 import System.Console.Readline
 import System.Directory (doesFileExist)
+import System.Environment (getArgs)
+import System.IO as SIO
 
 
--- Definiciones de datos --
----------------------------
+-- Definiciones de tipos datos --
+---------------------------------
 
 data Command = Help
              | Browse
@@ -102,8 +105,8 @@ commands =
      Cmd [":loadpolylines",":lpl"] "<file>" LoadLines "-> Cargar los polylines definidos en el archivo SVG <file>",
      Cmd [":loadpaths",":lpa"] "<file>" LoadPa "-> Cargar los paths definidos en el archivo SVG <file>",
      Cmd [":loadall", ":la"] "<file>" LoadAll "-> Cargar los rectángulos, polígonos y paths definidos en el archivo SVG <file>",
-     Cmd [":defc", ":dc"] "<expr>" DefC "-> Definir el rectángulo <expr> desde el intérprete",
-     Cmd [":defp ", "dp"] "<expr>" DefP "-> Definir el polígono <expr> desde el intérprete",
+     Cmd [":defc", ":dc"] "<expr>" (\x -> DefC ("cdef " ++ x)) "-> Definir el rectángulo <expr> desde el intérprete",
+     Cmd [":defp ", ":dp"] "<expr>" (\x -> DefP ("pdef " ++ x)) "-> Definir el polígono <expr> desde el intérprete",
      Cmd [":draw", ":d"] "<c> <m> <t> <p> <s>" Draw 
                          ("-> Ejecutar el algoritmo con todos los elementos cargados (c: contenedor seleccionado, " ++ 
                           "m: cardinal del conjunto poblacional, t: cantidad de iteraciones, p : probilidad de " ++
@@ -203,10 +206,12 @@ evalState str s = do a <- parseArgs str s
                                        pols  <- getPols eP r v
                                        pols' <- orderByGA pols order
                                        let closer = shrink ([], pols')
+                                       let sol    = getSolution (L.map p closer)
+                                       putStrLn (PJ.render (printSolution sol)) 
                                        SIO.writeFile file (draw con closer (k s))
                                        return ()
                                 Nothing ->
-                                    do SIO.putStrLn "\nLas figuras especificadas no entran en el contenedor"
+                                    do SIO.putStrLn "\nLos polígonos especificados no entran en el contenedor"
                                        print con
                                        return ()
                         _                    -> 
@@ -384,5 +389,5 @@ checkPols ps s f = if L.null n
 
 -- El lado izquierdo son los polígonos "legales"
 sepJN :: [a] -> (a -> Maybe a) -> ([a], [a])
-sepJN xs f = ([y | y <- L.filter (isJust . f) xs], [y | y <- L.filter (isNothing . f) xs])
+sepJN xs f = L.partition (isJust . f) xs
 

@@ -1,3 +1,7 @@
+-- ========================================
+-- ===== Definición de tipos de datos =====
+-- ========================================
+
 module Common where
 
 -- Tipos para polígonos desde línea de comando --

@@ -46,23 +46,22 @@ import Data.List
 FloatExp : '-' FLOAT { -$2 }
          | FLOAT     { $1  }
 
-Point :: { MyPoint }
-Point : FloatExp FloatExp     { ($1, $2) }
-      | FloatExp ',' FloatExp { ($1, $3) }
-
-PointList :: { [MyPoint] }
-PointList :                 { []      }
-          | Point PointList { $1 : $2 } 
-
-Sufix : TransformList Name { ($1, $2) }
-
 Name :      { "noname" }
      | NAME { $1       }
 
-SufixS : RectList Name { ($1, $2) }
+RectList :                              { []            }
+         | TRANSLATE FloatExp RectList  { $3            }
+         | TRANSLATE CPoint RectList    { $3            }
+         | ROTATE FloatExp RectList     { $3            }        
+         | SCALE FloatExp RectList      { Scale $2 : $3 }
+
+SufixR : RectList Name { ($1, $2) }
+
+Rect  :: { Rect }
+Rect  : FLOAT FLOAT SufixR { Rect {h = $1, w = $2, tr = fst $3, nr = snd $3} }
 
 Transform : TRANSLATE FloatExp                                                               { Thrash                     }
-          | TRANSLATE Point                                                                  { Thrash                     }
+          | TRANSLATE CPoint                                                                 { Thrash                     }
           | ROTATE FloatExp                                                                  { Thrash                     }
           | SCALE FloatExp                                                                   { Scale $2                   }
           | SKEWX FloatExp                                                                   { SkewX $2                   }
@@ -72,14 +71,18 @@ Transform : TRANSLATE FloatExp                                                  
 TransformList :                         { []      }
               | Transform TransformList { $1 : $2 }
 
-RectList :                             { []            }
-         | TRANSLATE FloatExp RectList { $3            }
-         | TRANSLATE Point RectList    { $3            }
-         | ROTATE FloatExp RectList    { $3            }        
-         | SCALE FloatExp RectList     { Scale $2 : $3 }
+Sufix : TransformList Name { ($1, $2) }
 
-Rect  :: { Rect }
-Rect  : FloatExp FloatExp SufixS { Rect {h = $1, w = $2, tr = fst $3, nr = snd $3} }
+CPoint :: { MyPoint }
+CPoint : FloatExp ',' FloatExp { ($1, $3) }
+
+Point :: { MyPoint }
+Point : FloatExp FloatExp     { ($1, $2) }
+      | CPoint                { $1       }
+
+PointList :: { [MyPoint] }
+PointList :                 { []      }
+          | Point PointList { $1 : $2 } 
 
 Polygon :: { SVGPolygon }
 Polygon : PointList Sufix { Pol {po = $1, tpo = fst $2, npo = snd $2} }
@@ -207,13 +210,12 @@ lexString cont cs = case span isAlpha cs of
                                              in cont (TName name) res'
                 
 
-parseRect s    = parseR s 1
+parseRect s     = parseR s 1
 
-parsePolygon s = parsePo s 1  
+parsePolygon s  = parsePo s 1  
 
 parsePolyLine s = parsePl s 1
 
-parsePath s    = parsePa s 1  
-
+parsePath s     = parsePa s 1  
 
 }

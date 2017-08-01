@@ -19,8 +19,8 @@ import Data.Maybe (isJust)
 
 import Graphics.Gloss.Geometry.Line (intersectSegSeg)
 
--- Tipos de datos --
---------------------
+-- Definiciones de tipos de datos --
+------------------------------------
 
 type SpPolygons = (Polygons, Polygons)
 
@@ -34,14 +34,20 @@ constant = 1.0
 shrink :: SpPolygons -> Polygons
 shrink (ps, [])   = ps
 shrink ([], q:qs) = shrink ([q], qs)
-shrink (ps, q:qs) = shrink (ps ++ [pickBest [oneShrink ps q, oneShrink ps r1, oneShrink ps r2, oneShrink ps r3]], qs)
-    where r1 = reflect q
-          r2 = reflect r1
-          r3 = reflect r2
+shrink (ps, q:qs) = shrink (ps ++ [pickBest (oneShrink ps q : (map (oneShrink ps) valid))], qs)
+    where r1         = reflect q
+          r2         = reflect r1
+          r3         = reflect r2
+          (valid, _) = partition isValidReflect [r1, r2, r3]
+
+isValidReflect :: C.Polygon -> Bool
+isValidReflect pol = (minX points >= 0) && (minY points >= 0)
+    where points = p pol
 
 pickBest :: Polygons -> C.Polygon
 pickBest ps = head (sortOn (minY . p) ps)
 
+-- Gira 90° al polígono
 reflect :: C.Polygon -> C.Polygon
 reflect pol = pol {p = translate (-tx) (-ty) (map (\(x, y) -> (-y, x)) (translate tx ty points))}
     where points   = p pol
@@ -71,15 +77,15 @@ recLeft bef pol = if pol == new
 bottom :: Polygons -> C.Polygon -> C.Polygon
 bottom bef pol
     | or (L.map (polygonCutA pol) bef) || 
-      (snd (minY points) < 0) = pol {p = translate 0 (-constant) points}
-    | otherwise               = bottom bef (pol {p = translate 0 constant points}) 
+      (snd (minY points) <= 0) = pol {p = translate 0 (-constant) points}
+    | otherwise                = bottom bef (pol {p = translate 0 constant points}) 
     where points = p pol
 
 left :: Polygons -> C.Polygon -> C.Polygon
 left bef pol  
     | or (L.map (polygonCutA pol) bef) || 
-      (fst (minX points) < 0) = pol {p = translate (-constant) 0 points} 
-    | otherwise               = left bef (pol {p = translate constant 0 points})
+      (fst (minX points) <= 0) = pol {p = translate (-constant) 0 points} 
+    | otherwise                = left bef (pol {p = translate constant 0 points})
     where points = p pol
 
 minX :: [MyPoint] -> MyPoint

@@ -1,3 +1,7 @@
+-- =============================================================
+-- ===== Módulo para imprimir visualmente en el intérprete =====
+-- =============================================================
+
 module PrettyPrint where
 
 -- Módulos propios
@@ -6,8 +10,20 @@ import Common
 -- Módulos prestados
 import Text.PrettyPrint.HughesPJ as PJ
 
+-- Definición de tipos de datos --
+----------------------------------
+
+type Solution = (Float, Float)
+
 -- Funciones --
 ---------------
+
+printSolution :: Solution -> Doc
+printSolution (solx, soly) = text "\nSe requiere una plancha de ancho " <>
+                             float solx <>
+                             text " y largo " <>
+                             float soly <>
+                             text "\n"
 
 printContainer :: Container -> Doc
 printContainer c = text ((nc c) ++ " ") <>

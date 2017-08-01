@@ -10,8 +10,7 @@ import Data.List
 }
 
 %name parseF FloatExp
-%name parseC Container
-%name parseDef DefExp
+%name parseC SContainer
 %name parseDefs Defs
 %name parseM Machine
 
@@ -21,6 +20,7 @@ import Data.List
 %lexer     { lexer } { TEof }
 
 %token
+    '~'         { TPSep      }
     '-'         { TMinus     }
     '='         { TEqual     }
     '['         { TRBracketO }
@@ -36,37 +36,37 @@ import Data.List
     COPY        { TCopy      }
     SCALE       { TScale     }
 
-%right ':'
-
 %%
 
 FloatExp   : '-' FLOAT { -$2 }
            | FLOAT     { $1  }
 
-Machine    : KERF FloatExp Defs { Kerf $2 $3 }
-
-DefExp     : POL NAME '=' BPolygon  { Dp (P {p = $4, pn = $2}) 1 }
-           | CON NAME '=' Container { Dc ($4 {nc = $2}) 1        }  
-
 Point      :: { MyPoint }
-Point      : FloatExp FloatExp  { ($1, $2) }
+Point      : FloatExp '~' FloatExp  { ($1, $3) }
+
+Polygon    :: { [MyPoint] }
+Polygon    : Point             { [$1]    }
+           | Point ',' Polygon { $1 : $3 }
 
 BPolygon   :: { [MyPoint] }
 BPolygon   : '[' ']'         { [] }
            | '[' Polygon ']' { $2 }
 
-Polygon    :: { [MyPoint] }
-Polygon    : Point ',' Polygon { $1 : $3 }
-           | Point             { [$1]    }
-
 Container  :: { Container }
 Container  : FLOAT X FLOAT   { C { p1x = 0, p1y = 0, p2x = $1, p2y = $3, rid = 0, nc = ""} }
 
-Defs       : DefExp Defs                                      { $1 : $2                                          }
-           |                                                  { []                                               }
+SContainer :: { Container }
+           : NAME '=' FLOAT X FLOAT {C {p1x = 0, p1y = 0, p2x = $3, p2y = $5, nc = $1} }
+
+DefExp     : POL NAME '=' BPolygon  { Dp (P {p = $4, pn = $2}) 1 }
+           | CON NAME '=' Container { Dc ($4 {nc = $2}) 1        }  
+
+Defs       :                                                  { []                                               }
+           | DefExp Defs                                      { $1 : $2                                          }
            | POL NAME '=' BPolygon COPY NAT SCALE FLOAT Defs  { copytimes (Dp (P {p = $4, pn = $2}) $8) $6 ++ $9 }
            | CON NAME '=' Container COPY NAT SCALE FLOAT Defs { copytimes (Dc ($4 {nc = $2}) $8) $6 ++ $9        } 
 
+Machine    : KERF FloatExp Defs { Kerf $2 $3 }
 
 {
 
@@ -102,7 +102,8 @@ parseError :: Token -> P a
 parseError _ = \s l -> failE ("Error de parseo en la linea " ++ show l) s l
 
 data Token  
-    = TMinus     
+    = TPSep
+    | TMinus     
     | TEqual
     | TRBracketO
     | TRBracketC 
@@ -132,6 +133,7 @@ lexer cont (c:cs)
     | isAlpha c = lexString cont (c:cs)
     | isDigit c = lexNum cont (c:cs) 
 lexer cont ('-':('-':cs)) = lexer cont (dropWhile (/= '\n') cs)
+lexer cont ('~':cs)       = cont TPSep cs
 lexer cont ('-':cs)       = cont TMinus cs
 lexer cont ('=':cs)       = cont TEqual cs
 lexer cont ('[':cs)       = cont TRBracketO cs
@@ -166,7 +168,5 @@ lexString cont (c:cs) = case span isAlpha (c:cs) of
 parseMac s = parseM s 1
 
 parseFloat s = parseF s 1
-
-parseCon s = parseC s 1 
 
 }

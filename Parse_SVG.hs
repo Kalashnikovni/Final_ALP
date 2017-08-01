@@ -1,12 +1,21 @@
+-- ============================================
+-- ===== Módulo para parsear archivos SVG =====
+-- ============================================
+
 {-# LANGUAGE OverloadedStrings #-}
 
 module Parse_SVG where
 
+
+-- Módulos prestados
 import Data.ByteString as BS
 import Data.List as L
 import Data.Text as T
 
 import Text.XmlHtml as XML
+
+-- Funciones --
+---------------
 
 getElements :: [Node] -> (Node -> Text) -> Text -> [Text] 
 getElements [] _ _   = []
@@ -47,6 +56,4 @@ lookD n
     where d  = getValue n "d"
           t  = getValue n "transform"
           id = getValue n "id" 
-
-
 

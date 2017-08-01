@@ -6,8 +6,8 @@ module Eval where
 import Common
 
 -- Módulos prestados
-import Data.List
 import Data.Ext 
+import Data.List
 import Data.Geometry.Point
 import Data.Geometry.LineSegment
 
@@ -16,8 +16,8 @@ import qualified Algorithms.Geometry.LineSegmentIntersection.BentleyOttmann as B
 import Graphics.Gloss.Data.Vector 
 import Graphics.Gloss.Geometry.Line
 
--- Definiciones de datos --
----------------------------
+-- Definiciones de tipos datos --
+---------------------------------
 
 data Quadrant    = I | II | III | IV deriving (Eq, Show)
 
