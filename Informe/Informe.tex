@@ -130,7 +130,9 @@ Juan Martín Rabasedas
     polígonos, rectángulos, máquina (que es un conjunto de polígonos y rectángulos junto con el kerf), y tipos
     de datos para los elementos pertinentes de archivos SVG.
     \item \textit{Draw.hs}: aquí se encuentran las funciones encargadas de crear el texto que conformará el
-    archivo SVG que se devuelve como resultado.
+    archivo SVG que se devuelve como resultado. Cabe destacar que en el archivo SVG que devuelve como
+    resultado la máquina de corte debe ir por las líneas verdes, y con el material que quita adicionalmente
+    quedara troquelado el polígono correspondiente que se encuentra dibujado en negro.
     \item \textit{Eval.hs}: se evalúan las definiciones, obteniendo los polígonos resultantes de aplicar las
     transformaciones que correspondan, y chequeando que los mismos sean válidos (es decir, tengan al menos
     tres lados y sean polígonos simples). Además se le agrega el valor del kerf a cada polígono de manera tal

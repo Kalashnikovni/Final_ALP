@@ -342,8 +342,9 @@ parseFile f s = do putStrLn $ "Abriendo " ++ f ++ "..."
                             Parse.Failed st -> do putStrLn $ f ++ ": " ++ st
                                                   return s 
                             Parse.Ok v      -> do s1 <- checkKerf (getKerf v) s
-                                                  s2 <- checkCons (fst (evalMac v)) s1
-                                                  checkPolygons (snd (evalMac v)) s2 
+                                                  let eMac = evalMac v
+                                                  s2 <- checkCons (fst eMac) s1
+                                                  checkPolygons (snd eMac) s2 
 
 getDefs :: Machine -> [Def]
 getDefs (Kerf _ ds) = ds
@@ -358,7 +359,7 @@ setKerf (Kerf _ ds) k = Kerf k ds
 
 checkKerf :: Float -> State -> IO State
 checkKerf v s = if v >= 0
-                then return (s {k = v})
+                then return (s {k = v, sp = L.map (addKerf (v - (k s)) areaSigned) (sp s)})
                 else do putStrLn "El valor del kerf debe ser mayor o igual a 0"
                         return s
 
