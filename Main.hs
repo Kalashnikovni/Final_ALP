@@ -14,7 +14,7 @@ import Draw
 import Eval
 import GA
 import Parse
-import Parse_SVG
+import ParseSVG
 import ParseSVGElements as PSE
 import Polygons as Pol --(embedPols, takeOut, rotate, getRotateds, getContainers)
 import PrettyPrint as PP

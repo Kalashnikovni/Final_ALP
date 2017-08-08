@@ -82,7 +82,6 @@ areaSigned points = if sum (zipWith (*) xdiffs ysums) < 0 then CW else CCW
           ys = map snd points 
 
 -- True es sentido horario, False es sentido antihorario
--- TODO: justificar por qué si clockwise sumo en tales cuadrantes, y si es counter sumo en los opuestos
 offsetLine :: Float -> MyPoint -> MyPoint -> CCW -> (MyPoint, MyPoint)
 offsetLine o p1 p2 c 
     | q == I || q == IV = if isCW c  

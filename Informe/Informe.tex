@@ -3,12 +3,15 @@
 \usepackage[utf8]{inputenc}
 \usepackage{textcomp}
 \usepackage{tasks}
-\usepackage[spanish]{babel}
+%\usepackage[spanish]{babel}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage[margin=1in]{geometry}
 \usepackage{indentfirst}
 \usepackage{graphicx}
+\usepackage[nounderscore]{syntax}
+
+\setlength{\grammarindent}{1.5cm}
 
 \author{
     Marzorati, Denise \\
@@ -70,8 +73,6 @@ Juan Martín Rabasedas
 
 \medskip
 \textit {Consideraciones}
-
-    \smallskip
     \begin{itemize}
         \item No se trabajará con figuras arbitrarias, sino que simplificará el problema considerando tan solo
     polígonos simples; es decir, polígonos cuyos lados no adyacentes no se intersecan (ya que el caso de
@@ -130,161 +131,103 @@ Juan Martín Rabasedas
     de datos para los elementos pertinentes de archivos SVG.
     \item \textit{Draw.hs}: aquí se encuentran las funciones encargadas de crear el texto que conformará el
     archivo SVG que se devuelve como resultado.
+    \item \textit{Eval.hs}: se evalúan las definiciones, obteniendo los polígonos resultantes de aplicar las
+    transformaciones que correspondan, y chequeando que los mismos sean válidos (es decir, tengan al menos
+    tres lados y sean polígonos simples). Además se le agrega el valor del kerf a cada polígono de manera tal
+    que al ejecutar el algoritmo genético lo tenga en cuenta.
+    \item \textit{GA.hs}: etapa del algoritmo genético, para revisar los detalles acerca del mismo ver [1].
+    \item \textit{Main.hs}: desarrolla el intérprete del programa que acepta como entrada archivos cuya
+    sintaxis describe polígonos, como así también archivos SVG que tengan definidos polígonos o rectángulos.
+    Se utilizó como guía [2].
+    \item \textit{Parse.hs}: parsea sentencias del DSL diseñado (de "máquinas").
+    \item \textit{ParseSVGElements.hs}: parsea las componentes que son de interés de los elementos deseados de
+    un archivo SVG.
+    \item \textit{ParseSVG.hs}: utiliza bibliotecas ya desarrolladas para "pre parsear" un archivo SVG,
+    quedándose tan solo con los elementos que son de interés del mismo, y devolviendo texto con la sintaxis
+    que ParseSVGElements acepta como argumento de entrada.
+    \item \textit{Polygon.hs}: contiene funciones utilizadas en la última etapa del proceso donde una vez que
+    el algoritmo genético ha finalizado se vuelven a "introducir" los polígonos dentro de su respectivo
+    contenedor.
+    \item \textit{PrettyPrint.hs}
+    \item \textit{Shrink.hs}: se encarga de la etapa de acercamiento de los polígonos.
 \end{itemize}
 
-\subsection*{DSL de "máquinas"}
-\setlength{\leftskip}{0.4cm}{
+\section*{DSL de "máquinas"}
+\setlength{\leftskip}{0.4cm}
 % *********************************************************************************************************** %
 % *********************************************************************************************************** %
 % *********************************************************************************************************** %
-\subsubsection*{Sintaxis abstracta}
+\subsection*{Sintaxis abstracta}
 \large
 
-\textit
-$<$floatExp$>$ ::=
+\begin{grammar}
+<floatExp> ::= <float>
+    \alt $-_{1}$ <float>
 
-    \setlength{\leftskip}{0.5cm}
-    $<$float$>$
+<point> ::= <floatExp> $\sim$ <floatExp>
 
-    $| -_{1} <$float$>$
+<polygon> ::= <point>
+    \alt <point> , <point>
 
-    \setlength{\leftskip}{0cm}
+<container> ::= <float> $\times$ <float>
 
-\medskip
-$<$point$>$ ::= $<$floatExp$>$ $\sim$ $<$floatExp$>$
+<defExp> ::= {\bfseries pol} <name> = <polygon>
+    \alt {\bfseries con} <name> = <container>
 
-\medskip
-$<$polygon$>$ ::=
+<defs> ::= <empty>
+    \alt <defExp> <defs>
+    \alt {\bfseries pol} <name> = <polygon> {\bfseries copy} <natural> {\bfseries scale} <float> <defs>
+    \alt {\bfseries con} <name> = <container> {\bfseries copy} <natural> {\bfseries scale} <float> <defs>
 
-    \setlength{\leftskip}{0.5cm}
-    $<$point$>$
-
-    $| <$point$>$ , $<$polygon$>$
-
-    \setlength{\leftskip}{0cm}
-
-\medskip
-$<$container$>$ ::= $<$float$>$ $\times$ $<$float$>$
-
-\medskip
-$<$defExp$>$ ::= {\bfseries pol} $<$name$>$ = $<$polygon$>$ 
-
-    \setlength{\leftskip}{0.5cm}
-    $|$ {\bfseries con} $<$name$>$ = $<$container$>$
-
-    \setlength{\leftskip}{0cm}
-
-\medskip
-$<$defs$>$ ::=
-    
-    \setlength{\leftskip}{0.5cm}
-    $<$empty$>$
-
-    $| <$defExp$>$ $<$defs$>$
-
-    $|$ {\bfseries pol} $<$name$>$ = $<$polygon$>$ {\bfseries copy} $<$natural$>$ {\bfseries scale}
-    $<$float$>$ $<$defs$>$
-
-    $|$ {\bfseries con} $<$name$>$ = $<$container$>$ {\bfseries copy} $<$natural$>$ {\bfseries scale}
-    $<$float$>$ $<$defs$>$
-
-    \setlength{\leftskip}{0cm}
-
-\medskip
-$<$machine$>$ ::= {\bfseries kerf} $<$float$>$ $<$defs$>$
+<machine> ::= {\bfseries kerf} <float> <defs>
+\end{grammar}
 
 \normalfont
 
 % *********************************************************************************************************** %
 % *********************************************************************************************************** %
 % *********************************************************************************************************** %
-\subsubsection*{Sintaxis concreta}
+\setlength{\leftskip}{0.4cm}
+\subsection*{Sintaxis concreta}
 
-\textit
-$<$digit$>$ ::= '0' $|$ '1' $|$ ... $|$ '9'
+\begin{grammar}
+<digit> ::= '0' | '1' | ... | '9'
 
-\medskip
-$<$natural$>$ ::=
+<natural> ::= <digit>
+    \alt <digit> <natural>
 
-    \setlength{\leftskip}{0.5cm}
-    $<$digit$>$ 
+<float> ::= <natural> '.' <natural>
 
-    $| <$digit$> <$natural$>$ 
+<floatExp> ::= <float>
+    \alt '-' <float>
 
-    \setlength{\leftskip}{0cm}
+<point> ::= <floatExp> '$\sim$' <floatExp>
 
-\medskip
-$<$float$>$ ::= $<$natural$>$ '.' $<$natural$>$ 
+<polygon> ::= <point>
+    \alt <point> ',' <polygon>
 
-\medskip
-$<$floatExp$>$ ::=
+<bPolygon> ::= '[' ']'
+    \alt '[' <polygon> ']'
 
-    \setlength{\leftskip}{0.5cm}
-    $<$float$>$
+<container> ::= <float> '$\times$' <float>
 
-    $|$ '-' $<$float$>$
+<defExp> ::= {\bfseries pdef} <name> '=' <bPolygon>
+    \alt {\bfseries 'con'} <name> '=' <container>
 
-    \setlength{\leftskip}{0cm}
+<defs> ::= <defExp> <defs>
+    \alt {\bfseries pdef} <name> '=' <bPolygon> {\bfseries 'copy'} <natural> {\bfseries 'scale'} <float> <defs>
+    \alt {\bfseries cdef} <name> '=' <container> {\bfseries 'copy'} <natural> {\bfseries 'scale'} <float> <defs>
+    \alt
 
-\medskip
-$<$point$>$ ::= $<$floatExp$>$ '$\sim$' $<$floatExp$>$
+<machine> ::= {\bfseries 'kerf'} <float> <defs>
+\end{grammar}
 
-\medskip
-$<$polygon$>$ ::=
+\normalfont
 
-    \setlength{\leftskip}{0.5cm}
-    $<$point$>$
-
-    $| <$point$>$ ',' $<$polygon$>$
-
-    \setlength{\leftskip}{0cm}
-
-\medskip
-$<$bPolygon$>$ ::=
-
-    \setlength{\leftskip}{0.5cm}
-    '[' ']'
-
-    $|$ '[' $<$polygon$>$ ']'
-
-    \setlength{\leftskip}{0cm}
-
-\medskip
-$<$container$>$ ::= $<$float$>$ '$\times$' $<$float$>$
-
-\medskip
-$<$defExp$>$ ::= {\bfseries 'pdef'} $<$name$>$ '=' $<$bPolygon$>$ 
-
-    \setlength{\leftskip}{0.5cm}
-    $|$ {\bfseries 'con'} $<$name$>$ '=' $<$container$>$
-
-    \setlength{\leftskip}{0cm}
-
-\medskip
-$<$defs$>$ ::=
-    
-    \setlength{\leftskip}{0.5cm}
-    $<$empty$>$
-
-    $| <$defExp$>$ $<$defs$>$
-
-    $|$ {\bfseries 'pdef'} $<$name$>$ = $<$bPolygon$>$ {\bfseries 'copy'} $<$natural$>$ {\bfseries 'scale'}
-    $<$float$>$ $<$defs$>$
-
-    $|$ {\bfseries 'cdef'} $<$name$>$ = $<$container$>$ {\bfseries 'copy'} $<$natural$>$ {\bfseries 'scale'}
-    $<$float$>$ $<$defs$>$
-
-    \setlength{\leftskip}{0cm}
-
-\medskip
-$<$machine$>$ ::= {\bfseries 'kerf'} $<$float$>$ $<$defs$>$
-}
-
-\subsection*{DSL de SVG}
-\setlength{\leftskip}{0.4cm}{
 % *********************************************************************************************************** %
 % *********************************************************************************************************** %
 % *********************************************************************************************************** %
+\section*{DSL de SVG}
 
     SVG cuenta con varios tipos de elementos que describen distintas figuras; los elementos que pueden
     resultar de interés para este trabajo son los siguientes: $<$rect$>$, $<$polygon$>$, $<$polyline$>$ y
@@ -304,136 +247,146 @@ $<$machine$>$ ::= {\bfseries 'kerf'} $<$float$>$ $<$defs$>$
 
     Para más detalles acerca de la sintaxis de dicho lenguaje ver las referencias.
 
-\subsubsection*{Sintaxis abstracta}
+\subsection*{Sintaxis abstracta}
 
-\textit
-$<$floatExp$>$ ::=
+\begin{grammar}
+<floatExp> ::= <float>
+    \alt $-_{1}$ <float>
 
-    \setlength{\leftskip}{0.5cm}
-    $<$float$>$
+<cPoint> ::= <floatExp> , <floatExp>
 
-    $| -_{1} <$float$>$
+<point> ::= <floatExp> <floatExp>
+    \alt <cPoint>
 
-    \setlength{\leftskip}{0cm}
+<rectList> ::= <empty>
+    \alt {\bfseries translate} <floatExp> <rectList>
+    \alt {\bfseries translate} <cPoint> <rectList>
+    \alt {\bfseries rotate} <floatExp> <rectList>
+    \alt {\bfseries scale} <floatExp> <rectList>
 
-\medskip
-$<$rectList$>$ ::= 
+<sufixR> ::= <rectList> <name>
 
-    \setlength{\leftskip}{0.5cm}
-    $<$empty$>$
+<rect> ::= <floatExp> <floatExp> <sufixR>
 
-    $|$ {\bfseries translate} $<$floatExp$>$ $<$rectList$>$
+<transform> ::= <translate> <floatExp>
+    \alt {\bfseries translate} <floatExp> <cPoint>
+    \alt {\bfseries translate} <cPoint> <rectList>
+    \alt {\bfseries rotate} <floatExp>
+    \alt {\bfseries scale} <floatExp>
+    \alt {\bfseries skewX} <floatExp>
+    \alt {\bfseries skewY} <floatExp>
+    \alt {\bfseries matrix} <floatExp> , <floatExp> , <floatExp> , <floatExp> , <floatExp> , <floatExp>
 
-    $|$ {\bfseries translate} $<$cPoint$>$ $<$rectList$>$
+<transformList> ::= <empty>
+    \alt <transform> <transformList>
 
-    $|$ {\bfseries rotate} $<$floatExp$>$ $<$rectList$>$
+<sufix> ::= <transformList> <name>
 
-    $|$ {\bfseries scale} $<$floatExp$>$ $<$rectList$>$
+<pointList> ::= <empty>
+    \alt <point> <pointList>
 
-    \setlength{\leftskip}{0cm}
+<polygon> ::= <pointList> <sufix>
 
-\medskip
-$<$sufixR$>$ ::= $<$rectList$>$ $<$name$>$
+<polyline> ::= {\bfseries poly} <pointList> <sufix>
 
-\medskip
-$<$rect$>$ ::= $<$floatExp$>$ $<$floatExp$>$ $<$sufixR$>$
+<startPath> ::= {\bfseries M} <point> <pathLines>
+    \alt {\bfseries m} <point> <pathLines>
 
-\medskip
-$<$point$>$ ::= 
+<pathLines> ::= {\bfseries h} <floatExp> <pathLines>
+    \alt {\bfseries H} <floatExp> <pathLines>
+    \alt {\bfseries v} <floatExp> <pathLines>
+    \alt {\bfseries V} <floatExp> <pathLines>
+    \alt {\bfseries l} <floatExp> <pathLines>
+    \alt {\bfseries L} <floatExp> <pathLines>
+    \alt <point> <pathLines>
+    \alt {\bfseries z}
 
-    \setlength{\leftskip}{0.5cm}
-    $<$floatExp$>$ {\bfseries space} $<$floatExp$>$
+<path> ::= <startPath> <sufix>
+\end{grammar}
 
-    $|$ cPoint
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+\subsection*{Sintaxis concreta}
 
-    \setlength{\leftskip}{0cm}
+\begin{grammar}
+<digit> ::= '0' | '1' | ... | '9'
 
-\medskip
-$<$pointList$>$ ::= 
+<natural> ::= <digit>
+    \alt <digit> <natural>
 
-    \setlength{\leftskip}{0.5cm}
-    $<$empty$>$
+<float> ::= <natural> '.' <natural>
 
-    $| <$point$>$ $<$pointList$>$
+<floatExp> ::= <float>
+    \alt $-_{1}$ <float>
 
-    \setlength{\leftskip}{0cm}
+<char> ::= 'a' | 'b' | ... | 'z' | 'A' | 'B' | ... | 'Z'
 
-\medskip
-$<$transform$>$ ::= 
+<name> ::= <empty>
+    \alt <char> <name>
+    \alt <digit> <name>
 
-    \setlength{\leftskip}{0.5cm}
-    $<$translate$>$ $<$floatExp$>$
+<cPoint> ::= <floatExp> ',' <floatExp>
 
-    $|$ {\bfseries translate} $<$floatExp$>$ $<$cPoint$>$
+<point> ::= <floatExp> <floatExp>
+    \alt <cPoint>
 
-    $|$ {\bfseries translate} $<$cPoint$>$ $<$rectList$>$
+<rectList> ::= {\bfseries 'translate'} <floatExp> <rectList>
+    \alt {\bfseries 'translate'} <cPoint> <rectList>
+    \alt {\bfseries 'rotate'} <floatExp> <rectList>
+    \alt {\bfseries 'scale'} <floatExp> <rectList>
+    \alt
 
-    $|$ {\bfseries rotate} $<$floatExp$>$
+<sufixR> ::= <rectList> <name>
 
-    $|$ {\bfseries scale} $<$floatExp$>$
+<rect> ::= <floatExp> <floatExp> <sufixR>
 
-    $|$ {\bfseries skewX} $<$floatExp$>$
+<transform> ::= <translate> <floatExp>
+    \alt {\bfseries 'translate'} <floatExp> <cPoint>
+    \alt {\bfseries 'translate'} <cPoint> <rectList>
+    \alt {\bfseries 'rotate'} <floatExp>
+    \alt {\bfseries 'scale'} <floatExp>
+    \alt {\bfseries 'skewX'} <floatExp>
+    \alt {\bfseries 'skewY'} <floatExp>
+    \alt {\bfseries 'matrix'} <floatExp> ',' <floatExp> ',' <floatExp> ',' <floatExp> ',' <floatExp> ',' <floatExp>
 
-    $|$ {\bfseries skewY} $<$floatExp$>$
-    
-    $|$ {\bfseries matrix} $<$floatExp$>$ , $<$floatExp$>$ , $<$floatExp$>$ , $<$floatExp$>$ , $<$floatExp$>$
-    , $<$floatExp$>$
+<transformList> ::= <transform> <transformList>
+    \alt
 
-    \setlength{\leftskip}{0cm}
+<sufix> ::= <transformList> <name>
 
-\medskip
-$<$transformList$>$ ::= 
+<pointList> ::= <point> <pointList>
+    \alt
 
-    \setlength{\leftskip}{0.5cm}
-    $<$empty$>$
+<polygon> ::= <pointList> <sufix>
 
-    $| <$transform$>$ $<$transformList$>$
+<polyline> ::= {\bfseries 'poly'} <pointList> <sufix>
 
-    \setlength{\leftskip}{0cm}
+<startPath> ::= {\bfseries 'M'} <point> <pathLines>
+    \alt {\bfseries 'm'} <point> <pathLines>
 
-\medskip
-$<$sufix$>$ ::= $<$transformList$>$ $<$name$>$
+<pathLines> ::= {\bfseries 'h'} <floatExp> <pathLines>
+    \alt {\bfseries 'H'} <floatExp> <pathLines>
+    \alt {\bfseries 'v'} <floatExp> <pathLines>
+    \alt {\bfseries 'V'} <floatExp> <pathLines>
+    \alt {\bfseries 'l'} <floatExp> <pathLines>
+    \alt {\bfseries 'L'} <floatExp> <pathLines>
+    \alt <point> <pathLines>
+    \alt {\bfseries 'z'}
 
-\medskip
-$<$polygon$>$ ::= $<$pointList$>$ $<$sufix$>$
+<path> ::= <startPath> <sufix>
+\end{grammar}
 
-\medskip
-$<$polyline$>$ ::= {\bfseries poly} $<$pointList$>$ $<$sufix$>$
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+% *********************************************************************************************************** %
+\section*{Observaciones}
 
-\medskip
-$<$startPath$>$ ::= 
-
-    \setlength{\leftskip}{0.5cm}
-    {\bfseries M} $<$point$>$ $<$pathL$>$
-
-    $|$ {\bfseries m} $<$point$>$ $<$pathL$>$
-
-    \setlength{\leftskip}{0cm}
-    
-\medskip
-$<$pathL$>$ ::= 
-
-    \setlength{\leftskip}{0.5cm}
-    
-    {\bfseries h} $<$floatExp$>$ $<$pathL$>$
-
-    $|$ {\bfseries H} $<$floatExp$>$ $<$pathL$>$
-
-    $|$ {\bfseries v} $<$floatExp$>$ $<$pathL$>$
-
-    $|$ {\bfseries V} $<$floatExp$>$ $<$pathL$>$
-
-    $|$ {\bfseries l} $<$point$>$ $<$pathL$>$
-
-    $|$ {\bfseries L} $<$point$>$ $<$pathL$>$
-
-    $|$ $<$point$>$ $<$pathL$>$
-
-    $|$ {\bfseries z}
-
-    \setlength{\leftskip}{0cm}
-
-}
+\begin{itemize}
+    \item En varios de los módulos donde se deben realizar cálculos se utilizan cotas superiores o inferiores
+    debido a la inexactitud de las operaciones (por ejemplo al considerar la intersección de dos rectas, si
+    esta coincide con un punto dado).
+\end{itemize}
 
 % *********************************************************************************************************** %
 % *********************************************************************************************************** %
@@ -442,11 +395,24 @@ $<$pathL$>$ ::=
 \begin{thebibliography}{9}
 
 \bibitem{lamport94}
-    Leslie Lamport,
-    \textit{\LaTeX: a document preparation system},
-    Addison Wesley, Massachusetts,
-    2nd edition,
-    1994.
+    Stefan Jakobs,
+    \textit{On genetic algorithms for the packing of polygons},
+    European journal of operational research,
+    1996.
+
+\bibitem{lamport95}
+    Mauro Jaskelioff, Cecilia Manzino, Juan Manuel Rabasedas, Eugenia Simich
+    \textit{Intérprete de lambda cálculo},
+    FCEIA,
+    2017.
+
+\bibitem{lamport96}
+    W3C, 
+    \textit{Basic shapes},
+    W3,
+    16 August 2011,
+    https://www.w3.org/TR/SVG/shapes,
+    2017.
 \end{thebibliography}
 
 \end{document}

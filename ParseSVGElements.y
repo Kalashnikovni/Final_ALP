@@ -49,6 +49,13 @@ FloatExp : '-' FLOAT { -$2 }
 Name :      { "noname" }
      | NAME { $1       }
 
+CPoint :: { MyPoint }
+CPoint : FloatExp ',' FloatExp { ($1, $3) }
+
+Point :: { MyPoint }
+Point : FloatExp FloatExp     { ($1, $2) }
+      | CPoint                { $1       }
+
 RectList :                              { []            }
          | TRANSLATE FloatExp RectList  { $3            }
          | TRANSLATE CPoint RectList    { $3            }
@@ -73,12 +80,6 @@ TransformList :                         { []      }
 
 Sufix : TransformList Name { ($1, $2) }
 
-CPoint :: { MyPoint }
-CPoint : FloatExp ',' FloatExp { ($1, $3) }
-
-Point :: { MyPoint }
-Point : FloatExp FloatExp     { ($1, $2) }
-      | CPoint                { $1       }
 
 PointList :: { [MyPoint] }
 PointList :                 { []      }
