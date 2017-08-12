@@ -205,7 +205,7 @@ evalState str s = do a <- parseArgs str s
                                        r     <- getRotateds v (L.map fstThree eP)
                                        pols  <- getPols eP r v
                                        pols' <- orderByGA pols order
-                                       let closer = shrink ([], pols')
+                                       let closer = shrink ([], pols') con
                                        let sol    = getSolution (L.map p closer)
                                        putStrLn (PJ.render (printSolution sol)) 
                                        SIO.writeFile file (draw con closer (k s))

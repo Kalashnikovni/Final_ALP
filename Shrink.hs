@@ -7,6 +7,7 @@ module Shrink where
 -- Módulos propios
 import Common as C
 import Eval (getSegs)
+import GA (heightR, widthR)
 
 -- Módulos prestados
 import Control.Lens
@@ -31,17 +32,18 @@ constant = 1.0
 -- Funciones --
 ---------------
 
-shrink :: SpPolygons -> Polygons
-shrink (ps, [])   = ps
-shrink ([], q:qs) = shrink ([q], qs)
-shrink (ps, q:qs) = shrink (ps ++ [pickBest (oneShrink ps q : (map (oneShrink ps) valid))], qs)
+shrink :: SpPolygons -> Container -> Polygons
+shrink (ps, [])   _ = ps
+shrink ([], q:qs) c = shrink ([q], qs) c
+shrink (ps, q:qs) c = shrink (ps ++ [pickBest (oneShrink ps q : (map (oneShrink ps) valid))], qs) c
     where r1         = reflect q
           r2         = reflect r1
           r3         = reflect r2
-          (valid, _) = partition isValidReflect [r1, r2, r3]
+          (valid, _) = partition (isValidReflect c) [r1, r2, r3]
 
-isValidReflect :: C.Polygon -> Bool
-isValidReflect pol = (minX points >= 0) && (minY points >= 0)
+isValidReflect :: Container -> C.Polygon -> Bool
+isValidReflect c pol = (minX points >= 0) && (minY points >= 0) &&
+                       (maxX points <= p2x c) && (maxY points <= p2y c)
     where points = p pol
 
 pickBest :: Polygons -> C.Polygon
@@ -59,8 +61,8 @@ translate tx ty points = map (\(x,y) -> (x - tx, y - ty)) points
 
 oneShrink :: Polygons -> C.Polygon -> C.Polygon
 oneShrink ps pol
-    | snd (minY (p pol)) > 0 = recBottom ps pol 
-    | otherwise              = recLeft ps pol
+    | minY (p pol) > 0 = recBottom ps pol 
+    | otherwise        = recLeft ps pol
           
 recBottom :: Polygons -> C.Polygon -> C.Polygon
 recBottom bef pol = if pol == new 
@@ -77,19 +79,22 @@ recLeft bef pol = if pol == new
 bottom :: Polygons -> C.Polygon -> C.Polygon
 bottom bef pol
     | or (L.map (polygonCutA pol) bef) || 
-      (snd (minY points) <= 0) = pol {p = translate 0 (-constant) points}
-    | otherwise                = bottom bef (pol {p = translate 0 constant points}) 
+      (minY points <= 0) = pol {p = translate 0 (-constant) points}
+    | otherwise          = bottom bef (pol {p = translate 0 constant points}) 
     where points = p pol
 
 left :: Polygons -> C.Polygon -> C.Polygon
 left bef pol  
     | or (L.map (polygonCutA pol) bef) || 
-      (fst (minX points) <= 0) = pol {p = translate (-constant) 0 points} 
-    | otherwise                = left bef (pol {p = translate constant 0 points})
+      (minX points <= 0) = pol {p = translate (-constant) 0 points} 
+    | otherwise          = left bef (pol {p = translate constant 0 points})
     where points = p pol
 
-minX :: [MyPoint] -> MyPoint
-minX points = minimumBy byX points
+minX :: [MyPoint] -> Float
+minX points = fst (minimumBy byX points)
+
+maxX :: [MyPoint] -> Float
+maxX points = fst (maximumBy byX points)
 
 byX :: MyPoint -> MyPoint -> Ordering
 byX (x1, y1) (x2, y2) = if x1 < x2 
@@ -98,8 +103,11 @@ byX (x1, y1) (x2, y2) = if x1 < x2
                              then EQ
                              else GT
 
-minY :: [MyPoint] -> MyPoint
-minY points = minimumBy byY points 
+minY :: [MyPoint] -> Float
+minY points = snd (minimumBy byY points) 
+
+maxY :: [MyPoint] -> Float
+maxY points = snd (maximumBy byY points) 
 
 byY :: MyPoint -> MyPoint -> Ordering
 byY (x1, y1) (x2, y2) = if y1 < y2 
